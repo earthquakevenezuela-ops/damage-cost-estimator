@@ -502,6 +502,33 @@ async function downloadAllBuildingsCSV() {
 
 document.getElementById("downloadAllCSV")
   .addEventListener("click", downloadAllBuildingsCSV);
+  const summaryLayer = new FeatureLayer({
+  url: "https://services7.arcgis.com/WSiUmUhlFx4CtMBB/ArcGIS/rest/services/202610_s1_likelydmgareas/FeatureServer/0",
+  outFields: ["*"]
+});
+
+async function loadDamageSummary() {
+  await summaryLayer.load();
+
+  const q75 = summaryLayer.createQuery();
+  q75.where = "damage_probability >= 0.75";
+
+  const q64 = summaryLayer.createQuery();
+  q64.where = "damage_probability > 0 AND damage_probability < 0.65";
+
+  const q0 = summaryLayer.createQuery();
+  q0.where = "damage_probability = 0";
+
+  const count75 = await summaryLayer.queryFeatureCount(q75);
+  const count64 = await summaryLayer.queryFeatureCount(q64);
+  const count0 = await summaryLayer.queryFeatureCount(q0);
+
+  document.getElementById("count75").innerHTML = count75.toLocaleString();
+  document.getElementById("count64").innerHTML = count64.toLocaleString();
+  document.getElementById("count0").innerHTML = count0.toLocaleString();
+}
+
+loadDamageSummary();
 });
 </script>
 
