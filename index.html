@@ -202,6 +202,13 @@ require([
 
     if (!result) return;
 
+    const attributes = result.graphic.attributes;
+
+const damageLabel = attributes.label;
+const damageProbability = attributes.damage_probability;
+
+console.log(damageLabel);
+console.log(damageProbability);
     const polygon = result.graphic.geometry;
 
     currentArea = Math.abs(
@@ -216,9 +223,6 @@ require([
 
 });
 </script>
-
-</body>
-</html>
 
 </body>
 </html>
