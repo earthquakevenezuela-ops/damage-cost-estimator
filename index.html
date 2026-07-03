@@ -20,51 +20,18 @@
       position: absolute;
       top: 15px;
       right: 15px;
-      width: 400px;
+      width: 380px;
       max-height: 92vh;
       overflow-y: auto;
       background: white;
       padding: 16px;
-      border-radius: 10px;
-      box-shadow: 0 4px 14px rgba(0,0,0,.35);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.3);
       z-index: 100;
     }
 
-    h2 { margin-top: 0; margin-bottom: 6px; }
-    h3 { margin-bottom: 6px; margin-top: 16px; }
-
-    .subtitle {
-      font-size: 13px;
-      color: #555;
-      margin-bottom: 12px;
-    }
-
-    .status-box {
-      background: #f3f3f3;
-      padding: 12px;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      font-size: 14px;
-    }
-
-    .package {
-      font-size: 18px;
-      font-weight: bold;
-      margin-top: 6px;
-    }
-
-    label {
-      font-size: 13px;
-      font-weight: bold;
-    }
-
-    input {
-      width: 100%;
-      padding: 7px;
-      margin-top: 4px;
-      margin-bottom: 10px;
-      box-sizing: border-box;
-    }
+    h2 { margin-top: 0; }
+    h3 { margin-bottom: 6px; }
 
     table {
       width: 100%;
@@ -83,21 +50,16 @@
     }
 
     .total {
-      font-size: 22px;
+      font-size: 18px;
       font-weight: bold;
-      margin-top: 8px;
-      padding: 10px;
-      background: #111;
-      color: white;
-      border-radius: 6px;
-      text-align: right;
+      color: #111;
     }
 
-    .note {
-      font-size: 12px;
-      color: #666;
-      margin-top: 12px;
-      line-height: 1.4;
+    select, input {
+      width: 100%;
+      padding: 6px;
+      margin-top: 4px;
+      margin-bottom: 8px;
     }
   </style>
 </head>
@@ -108,13 +70,13 @@
 
 <div id="panel">
   <h2>Damage Cost Estimator</h2>
-  <div class="subtitle">Click any building on the map.</div>
+  <p>Click a red building to estimate reconstruction cost.</p>
 
-  <div class="status-box">
-    <b>Current Work Package</b>
-    <div id="workPackageText" class="package">Click a building...</div>
-    <div id="damageClassText">Red = demolish. White/yellow/orange = repair.</div>
-  </div>
+  <label>Work Package</label>
+  <select id="workPackage">
+    <option value="rebuild">Demolish & Rebuild ≥75% Damaged</option>
+    <option value="repair">Repair & Retrofit &lt;75% Damaged</option>
+  </select>
 
   <label>Estimated Stories</label>
   <input id="manualStories" type="number" min="1" value="2">
@@ -124,8 +86,6 @@
     <tr><td>Footprint Area</td><td id="area">--</td></tr>
     <tr><td>Stories</td><td id="stories">--</td></tr>
     <tr><td>Built Area</td><td id="built">--</td></tr>
-    <tr><td>Damage Label</td><td id="damageLabel">--</td></tr>
-    <tr><td>Damage Probability</td><td id="damageProbability">--</td></tr>
   </table>
 
   <h3>Cost Breakdown</h3>
@@ -140,13 +100,7 @@
   </table>
 
   <h3>Total Estimate</h3>
-  <div id="totalCost" class="total">--</div>
-
-  <div class="note">
-    Rule used: only buildings with <b>label = likely_damaged</b> are assigned to
-    <b>Demolish & Rebuild</b>. All other buildings are assigned to
-    <b>Repair & Retrofit</b>.
-  </div>
+  <p class="total" id="totalCost">--</p>
 </div>
 
 <script>
@@ -171,28 +125,20 @@ require([
   };
 
   let currentArea = 0;
-  let selectedLabel = "not_damaged";
-  let selectedProbability = null;
 
   const webmap = new WebMap({
-    portalItem: { id: "0c3d77dd5aae46e4829d9a282477615c" }
+    portalItem: {
+      id: "0c3d77dd5aae46e4829d9a282477615c"
+    }
   });
 
   const view = new MapView({
     container: "viewDiv",
-    map: webmap,
-    popupEnabled: false
+    map: webmap
   });
 
   function money(value) {
     return "$" + Math.round(value).toLocaleString();
-  }
-
-  function percent(value) {
-    if (value === null || value === undefined || value === "") return "--";
-    const num = Number(value);
-    if (isNaN(num)) return "--";
-    return (num * 100).toFixed(0) + "%";
   }
 
   function calculateCosts() {
@@ -200,8 +146,7 @@ require([
 
     const stories = Number(document.getElementById("manualStories").value) || 1;
     const builtArea = currentArea * stories;
-
-    const isRedDamaged = selectedLabel === "likely_damaged";
+    const workPackage = document.getElementById("workPackage").value;
 
     let baseCost = 0;
     let repairCost = 0;
@@ -212,7 +157,7 @@ require([
     let engineeringCost = 0;
     let total = 0;
 
-    if (isRedDamaged) {
+    if (workPackage === "rebuild") {
       baseCost = builtArea * COSTS.constructionPerM2;
       isolatorCost = COSTS.baseIsolationPerBuilding;
       damperCost = COSTS.dampersPerBuilding;
@@ -221,26 +166,20 @@ require([
       const hardCost = baseCost + isolatorCost + damperCost + rubbleCost;
       engineeringCost = hardCost * COSTS.engineeringRebuildRate;
       total = hardCost + engineeringCost;
+    }
 
-      document.getElementById("workPackageText").innerHTML = "Demolish & Rebuild";
-      document.getElementById("damageClassText").innerHTML = "Red building detected.";
-    } else {
+    if (workPackage === "repair") {
       repairCost = builtArea * COSTS.structuralRepairPerM2;
       retrofitCost = builtArea * COSTS.seismicRetrofitPerM2;
 
       const hardCost = repairCost + retrofitCost;
       engineeringCost = hardCost * COSTS.engineeringRepairRate;
       total = hardCost + engineeringCost;
-
-      document.getElementById("workPackageText").innerHTML = "Repair & Retrofit";
-      document.getElementById("damageClassText").innerHTML = "Non-red building detected.";
     }
 
     document.getElementById("area").innerHTML = currentArea.toFixed(1) + " m²";
     document.getElementById("stories").innerHTML = stories;
     document.getElementById("built").innerHTML = builtArea.toFixed(1) + " m²";
-    document.getElementById("damageLabel").innerHTML = selectedLabel;
-    document.getElementById("damageProbability").innerHTML = percent(selectedProbability);
 
     document.getElementById("baseCost").innerHTML = money(baseCost);
     document.getElementById("repairCost").innerHTML = money(repairCost);
@@ -258,28 +197,28 @@ require([
     const result = response.results.find(r =>
       r.graphic &&
       r.graphic.geometry &&
-      r.graphic.geometry.type === "polygon" &&
-      r.graphic.attributes
+      r.graphic.geometry.type === "polygon"
     );
 
     if (!result) return;
 
-    const attributes = result.graphic.attributes;
-
-    selectedLabel = attributes.label || "not_damaged";
-    selectedProbability = attributes.damage_probability ?? null;
+    const polygon = result.graphic.geometry;
 
     currentArea = Math.abs(
-      geometryEngine.geodesicArea(result.graphic.geometry, "square-meters")
+      geometryEngine.geodesicArea(polygon, "square-meters")
     );
 
     calculateCosts();
   });
 
+  document.getElementById("workPackage").addEventListener("change", calculateCosts);
   document.getElementById("manualStories").addEventListener("input", calculateCosts);
 
 });
 </script>
+
+</body>
+</html>
 
 </body>
 </html>
