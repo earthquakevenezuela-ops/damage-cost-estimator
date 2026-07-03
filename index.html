@@ -1,0 +1,185 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Damage Cost Estimator</title>
+
+  <!-- ArcGIS CSS -->
+  <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css">
+
+  <!-- ArcGIS JavaScript -->
+  <script src="https://js.arcgis.com/4.30/"></script>
+
+  <style>
+    html,
+    body,
+    #viewDiv {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    #panel {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 320px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,.25);
+      z-index: 100;
+    }
+
+    h2{
+      margin-top:0;
+    }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+    }
+
+    td{
+      padding:6px 0;
+      border-bottom:1px solid #ddd;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="viewDiv"></div>
+
+<div id="panel">
+
+<h2>Damage Cost Estimator</h2>
+
+<p>Click a red building.</p>
+
+<table>
+
+<tr>
+<td>Footprint Area</td>
+<td id="area">--</td>
+</tr>
+
+<tr>
+<td>Estimated Stories</td>
+<td id="stories">--</td>
+</tr>
+
+<tr>
+<td>Built Area</td>
+<td id="built">--</td>
+</tr>
+
+<tr>
+<td>Construction Cost</td>
+<td id="cost">--</td>
+</tr>
+
+</table>
+
+</div>
+
+<script>
+
+require([
+"esri/config",
+"esri/WebMap",
+"esri/views/MapView",
+"esri/geometry/geometryEngine"
+
+], function(
+esriConfig,
+WebMap,
+MapView,
+geometryEngine
+){
+
+esriConfig.portalUrl="https://gis.earthdata.nasa.gov/portal";
+
+const webmap=new WebMap({
+
+portalItem:{
+id:"0c3d77dd5aae46e4829d9a282477615c"
+}
+
+});
+
+const view=new MapView({
+
+container:"viewDiv",
+map:webmap
+
+});
+
+function estimateStories(area){
+
+if(area<80) return 1;
+if(area<180) return 2;
+if(area<350) return 3;
+if(area<700) return 4;
+
+return 5;
+
+}
+
+view.on("click", async(event)=>{
+
+const response=await view.hitTest(event);
+
+const result=response.results.find(r=>
+r.graphic &&
+r.graphic.geometry &&
+r.graphic.geometry.type==="polygon"
+);
+
+if(!result){
+
+return;
+
+}
+
+const polygon=result.graphic.geometry;
+
+const area=Math.abs(
+geometryEngine.geodesicArea(
+polygon,
+"square-meters"
+)
+);
+
+const stories=estimateStories(area);
+
+const builtArea=area*stories;
+
+const cost=builtArea*684;
+
+document.getElementById("area").innerHTML=
+area.toFixed(1)+" m²";
+
+document.getElementById("stories").innerHTML=
+stories;
+
+document.getElementById("built").innerHTML=
+builtArea.toFixed(1)+" m²";
+
+document.getElementById("cost").innerHTML=
+"$"+cost.toLocaleString();
+
+});
+
+});
+
+</script>
+
+</body>
+</html>
+```
