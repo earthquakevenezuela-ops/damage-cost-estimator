@@ -133,8 +133,9 @@ require([
   "esri/config",
   "esri/WebMap",
   "esri/views/MapView",
-  "esri/geometry/geometryEngine"
-], function(esriConfig, WebMap, MapView, geometryEngine) {
+  "esri/geometry/geometryEngine",
+"esri/layers/FeatureLayer"
+], function(esriConfig, WebMap, MapView, geometryEngine, FeatureLayer) {
 
   esriConfig.portalUrl = "https://gis.earthdata.nasa.gov/portal";
 
