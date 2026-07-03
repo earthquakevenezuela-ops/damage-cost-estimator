@@ -405,7 +405,13 @@ async function downloadAllBuildingsCSV() {
 
   const count = await structuresLayer.queryFeatureCount(query);
   const rows = [];
+let count75 = 0;
+let count64 = 0;
+let count0 = 0;
 
+let cost75 = 0;
+let cost64 = 0;
+let cost0 = 0;
   const stories = Number(document.getElementById("manualStories").value) || 2;
 
   for (let start = 0; start < count; start += 2000) {
