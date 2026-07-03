@@ -372,6 +372,131 @@ async function downloadAllBuildingsCSV() {
 }
 
 document.getElementById("downloadAllCSV").addEventListener("click", downloadAllBuildingsCSV);
+  const structuresLayer = new FeatureLayer({
+  url: "https://services7.arcgis.com/WSiUmUhlFx4CtMBB/ArcGIS/rest/services/202610_s1_likelydmgareas/FeatureServer/0",
+  outFields: ["*"]
+});
+
+async function downloadAllBuildingsCSV() {
+  const status = document.getElementById("downloadStatus");
+  status.innerHTML = "Preparing CSV... this may take a minute.";
+
+  await structuresLayer.load();
+
+  const query = structuresLayer.createQuery();
+  query.where = "1=1";
+  query.outFields = ["*"];
+  query.returnGeometry = true;
+
+  const count = await structuresLayer.queryFeatureCount(query);
+  const rows = [];
+
+  const stories = Number(document.getElementById("manualStories").value) || 2;
+
+  for (let start = 0; start < count; start += 2000) {
+    query.start = start;
+    query.num = 2000;
+
+    const result = await structuresLayer.queryFeatures(query);
+
+    result.features.forEach(feature => {
+      const attributes = feature.attributes || {};
+
+      const areaM2 = Math.abs(
+        geometryEngine.geodesicArea(feature.geometry, "square-meters")
+      );
+
+      const builtArea = areaM2 * stories;
+      const damageProbability = Number(attributes.damage_probability) || 0;
+      const label = attributes.label || "";
+
+      const isRed =
+        damageProbability >= 0.75 || label === "likely_damaged";
+
+      let baseCost = 0;
+      let repairCost = 0;
+      let retrofitCost = 0;
+      let isolatorCost = 0;
+      let damperCost = 0;
+      let rubbleCost = 0;
+      let engineeringCost = 0;
+      let totalCost = 0;
+      let workPackage = "";
+
+      if (isRed) {
+        workPackage = "Demolish & Rebuild";
+
+        baseCost = builtArea * COSTS.constructionPerM2;
+        isolatorCost = COSTS.baseIsolationPerBuilding;
+        damperCost = COSTS.dampersPerBuilding;
+        rubbleCost = COSTS.rubbleRemovalPerBuilding;
+
+        const hardCost = baseCost + isolatorCost + damperCost + rubbleCost;
+        engineeringCost = hardCost * COSTS.engineeringRebuildRate;
+        totalCost = hardCost + engineeringCost;
+      } else {
+        workPackage = "Repair & Retrofit";
+
+        repairCost = builtArea * COSTS.structuralRepairPerM2;
+        retrofitCost = builtArea * COSTS.seismicRetrofitPerM2;
+
+        const hardCost = repairCost + retrofitCost;
+        engineeringCost = hardCost * COSTS.engineeringRepairRate;
+        totalCost = hardCost + engineeringCost;
+      }
+
+      rows.push({
+        overture_id: attributes.overture_id || "",
+        label: label,
+        damage_probability: damageProbability,
+        footprint_m2: areaM2.toFixed(1),
+        footprint_ft2: (areaM2 * 10.7639).toFixed(1),
+        assumed_stories: stories,
+        built_area_m2: builtArea.toFixed(1),
+        work_package: workPackage,
+        base_construction: Math.round(baseCost),
+        structural_repairs: Math.round(repairCost),
+        seismic_retrofit: Math.round(retrofitCost),
+        base_isolation: Math.round(isolatorCost),
+        energy_dampers: Math.round(damperCost),
+        rubble_removal: Math.round(rubbleCost),
+        engineering_contingency: Math.round(engineeringCost),
+        total_cost: Math.round(totalCost)
+      });
+    });
+
+    status.innerHTML = "Processed " + Math.min(start + 2000, count).toLocaleString() + " of " + count.toLocaleString() + " buildings...";
+  }
+
+  const headers = Object.keys(rows[0]);
+
+  const csv = [
+    headers.join(","),
+    ...rows.map(row =>
+      headers.map(h => `"${String(row[h]).replaceAll('"', '""')}"`).join(",")
+    )
+  ].join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "all_building_cost_estimates.csv";
+  link.click();
+
+  URL.revokeObjectURL(url);
+
+  const total = rows.reduce((sum, row) => sum + Number(row.total_cost), 0);
+
+  status.innerHTML =
+    "Downloaded " + rows.length.toLocaleString() +
+    " buildings. Total estimated cost: $" +
+    Math.round(total).toLocaleString();
+}
+
+document.getElementById("downloadAllCSV")
+  .addEventListener("click", downloadAllBuildingsCSV);
 });
 </script>
 
