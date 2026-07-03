@@ -124,7 +124,8 @@ require([
     engineeringRepairRate: 0.10
   };
 
-  let currentArea = 0;
+let currentArea = 0;
+let selectedLabel = "not_damaged";
 
   const webmap = new WebMap({
     portalItem: {
@@ -146,7 +147,10 @@ require([
 
     const stories = Number(document.getElementById("manualStories").value) || 1;
     const builtArea = currentArea * stories;
-    const workPackage = document.getElementById("workPackage").value;
+   const workPackage =
+  selectedLabel === "likely_damaged" ? "rebuild" : "repair";
+
+document.getElementById("workPackage").value = workPackage;
 
     let baseCost = 0;
     let repairCost = 0;
@@ -202,7 +206,10 @@ require([
 
     if (!result) return;
 
-    const polygon = result.graphic.geometry;
+    const attributes = result.graphic.attributes || {};
+selectedLabel = attributes.label || "not_damaged";
+
+const polygon = result.graphic.geometry;
 
     currentArea = Math.abs(
       geometryEngine.geodesicArea(polygon, "square-meters")
@@ -211,7 +218,7 @@ require([
     calculateCosts();
   });
 
-  document.getElementById("workPackage").addEventListener("change", calculateCosts);
+ 
   document.getElementById("manualStories").addEventListener("input", calculateCosts);
 
 });
