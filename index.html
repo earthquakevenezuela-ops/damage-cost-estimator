@@ -465,7 +465,16 @@ let cost0 = 0;
         engineeringCost = hardCost * COSTS.engineeringRepairRate;
         totalCost = hardCost + engineeringCost;
       }
-
+if (damageProbability >= 0.75) {
+  count75++;
+  cost75 += totalCost;
+} else if (damageProbability === 0) {
+  count0++;
+  cost0 += totalCost;
+} else {
+  count64++;
+  cost64 += totalCost;
+}
       rows.push({
         overture_id: attributes.overture_id || "",
         label: label,
