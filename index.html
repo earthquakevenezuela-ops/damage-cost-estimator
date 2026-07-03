@@ -213,9 +213,131 @@ require([
 
   document.getElementById("workPackage").addEventListener("change", calculateCosts);
   document.getElementById("manualStories").addEventListener("input", calculateCosts);
+<!DOCTYPE html>
+<html lang="en">
+
+<script>
+require([
+  "esri/config",
+  "esri/WebMap",
+  "esri/views/MapView",
+  "esri/geometry/geometryEngine"
+], function(esriConfig, WebMap, MapView, geometryEngine) {
+
+  esriConfig.portalUrl = "https://gis.earthdata.nasa.gov/portal";
+
+  const COSTS = {
+    constructionPerM2: 684,
+    structuralRepairPerM2: 80,
+    seismicRetrofitPerM2: 45,
+    baseIsolationPerBuilding: 180000,
+    dampersPerBuilding: 90000,
+    rubbleRemovalPerBuilding: 15000,
+    engineeringRebuildRate: 0.12,
+    engineeringRepairRate: 0.10
+  };
+
+  let currentArea = 0;
+  let selectedLabel = "not_damaged";
+
+  const webmap = new WebMap({
+    portalItem: { id: "0c3d77dd5aae46e4829d9a282477615c" }
+  });
+
+  const view = new MapView({
+    container: "viewDiv",
+    map: webmap,
+    popupEnabled: false
+  });
+
+  function money(value) {
+    return "$" + Math.round(value).toLocaleString();
+  }
+
+  function calculateCosts() {
+    if (!currentArea) return;
+
+    const stories = Number(document.getElementById("manualStories").value) || 1;
+    const builtArea = currentArea * stories;
+
+    const workPackage =
+      selectedLabel === "likely_damaged" ? "rebuild" : "repair";
+
+    document.getElementById("workPackage").value = workPackage;
+
+    if (document.getElementById("damageRuleText")) {
+      document.getElementById("damageRuleText").innerHTML =
+        workPackage === "rebuild"
+          ? "Red building detected → Work Package: Demolish & Rebuild"
+          : "White / yellow / orange building detected → Work Package: Repair & Retrofit";
+    }
+
+    let baseCost = 0;
+    let repairCost = 0;
+    let retrofitCost = 0;
+    let isolatorCost = 0;
+    let damperCost = 0;
+    let rubbleCost = 0;
+    let engineeringCost = 0;
+    let total = 0;
+
+    if (workPackage === "rebuild") {
+      baseCost = builtArea * COSTS.constructionPerM2;
+      isolatorCost = COSTS.baseIsolationPerBuilding;
+      damperCost = COSTS.dampersPerBuilding;
+      rubbleCost = COSTS.rubbleRemovalPerBuilding;
+
+      const hardCost = baseCost + isolatorCost + damperCost + rubbleCost;
+      engineeringCost = hardCost * COSTS.engineeringRebuildRate;
+      total = hardCost + engineeringCost;
+    } else {
+      repairCost = builtArea * COSTS.structuralRepairPerM2;
+      retrofitCost = builtArea * COSTS.seismicRetrofitPerM2;
+
+      const hardCost = repairCost + retrofitCost;
+      engineeringCost = hardCost * COSTS.engineeringRepairRate;
+      total = hardCost + engineeringCost;
+    }
+
+    document.getElementById("area").innerHTML = currentArea.toFixed(1) + " m²";
+    document.getElementById("stories").innerHTML = stories;
+    document.getElementById("built").innerHTML = builtArea.toFixed(1) + " m²";
+
+    document.getElementById("baseCost").innerHTML = money(baseCost);
+    document.getElementById("repairCost").innerHTML = money(repairCost);
+    document.getElementById("retrofitCost").innerHTML = money(retrofitCost);
+    document.getElementById("isolatorCost").innerHTML = money(isolatorCost);
+    document.getElementById("damperCost").innerHTML = money(damperCost);
+    document.getElementById("rubbleCost").innerHTML = money(rubbleCost);
+    document.getElementById("engineeringCost").innerHTML = money(engineeringCost);
+    document.getElementById("totalCost").innerHTML = money(total);
+  }
+
+  view.on("click", async function(event) {
+    const response = await view.hitTest(event);
+
+    const result = response.results.find(r =>
+      r.graphic &&
+      r.graphic.geometry &&
+      r.graphic.geometry.type === "polygon" &&
+      r.graphic.attributes &&
+      r.graphic.attributes.label
+    );
+
+    if (!result) return;
+
+    selectedLabel = result.graphic.attributes.label;
+
+    currentArea = Math.abs(
+      geometryEngine.geodesicArea(result.graphic.geometry, "square-meters")
+    );
+
+    calculateCosts();
+  });
+
+  document.getElementById("manualStories").addEventListener("input", calculateCosts);
 
 });
 </script>
-
 </body>
 </html>
