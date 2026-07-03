@@ -385,7 +385,7 @@ async function downloadAllBuildingsCSV() {
     " buildings. Total estimated cost: $" +
     Math.round(totalProgramCost).toLocaleString();
 }
-
+downloadAllBuildingsCSV();
 document.getElementById("downloadAllCSV").addEventListener("click", downloadAllBuildingsCSV);
   const structuresLayer = new FeatureLayer({
   url: "https://services7.arcgis.com/WSiUmUhlFx4CtMBB/ArcGIS/rest/services/202610_s1_likelydmgareas/FeatureServer/0",
