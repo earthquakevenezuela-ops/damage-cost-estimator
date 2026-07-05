@@ -1,13 +1,13 @@
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Damage Cost Estimator</title>
-
   <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css">
   <script src="https://js.arcgis.com/4.30/"></script>
-
   <style>
     html, body, #viewDiv {
       height: 100%;
@@ -15,7 +15,6 @@
       margin: 0;
       font-family: Arial, Helvetica, sans-serif;
     }
-
     #panel {
       position: absolute;
       top: 15px;
@@ -29,88 +28,78 @@
       box-shadow: 0 4px 12px rgba(0,0,0,.3);
       z-index: 100;
     }
-
     h2 { margin-top: 0; }
     h3 { margin-bottom: 6px; }
-
     table {
       width: 100%;
       border-collapse: collapse;
       font-size: 14px;
     }
-
     td {
       padding: 6px 0;
       border-bottom: 1px solid #ddd;
     }
-
     td:last-child {
       text-align: right;
       font-weight: bold;
     }
-
     .total {
       font-size: 18px;
       font-weight: bold;
       color: #111;
     }
-
-    select, input {
+    select, input, button {
       width: 100%;
       padding: 6px;
       margin-top: 4px;
       margin-bottom: 8px;
+      box-sizing: border-box;
     }
-    @media (max-width:700px){
-
-  #panel{
-    left:10px;
-    right:10px;
-    top:auto;
-    bottom:10px;
-    width:auto;
-    max-height:45vh;
-    padding:12px;
-  }
-
-  h2{
-    font-size:18px;
-  }
-
-  h3{
-    font-size:15px;
-  }
-
-  table{
-    font-size:12px;
-  }
+    @media (max-width:700px) {
+      #panel {
+        left: 10px;
+        right: 10px;
+        top: auto;
+        bottom: 10px;
+        width: auto;
+        max-height: 45vh;
+        padding: 12px;
+      }
+      h2 { font-size: 18px; }
+      h3 { font-size: 15px; }
+      table { font-size: 12px; }
+    }
   </style>
 </head>
-
 <body>
-
 <div id="viewDiv"></div>
-
 <div id="panel">
   <h2>Damage Cost Estimator</h2>
-  <p>Click a red building to estimate reconstruction cost.</p>
-
+  <p>Click a building to estimate reconstruction cost.</p>
+  <div style="background:#f3f3f3; padding:10px; margin-bottom:10px; border-radius:6px;">
+    <b>Damage Summary</b><br><br>
+    ≥75% damage: <span id="count75">--</span><br>
+    Cost: <span id="cost75">--</span><br><br>
+    1–64% damage: <span id="count64">--</span><br>
+    Cost: <span id="cost64">--</span><br><br>
+    0% damage: <span id="count0">--</span><br>
+    Cost: <span id="cost0">--</span><br><br>
+    <b>Total Program Cost:</b><br>
+    <span id="grandTotal">--</span>
+  </div>
   <label>Work Package</label>
   <select id="workPackage">
     <option value="rebuild">Demolish & Rebuild ≥75% Damaged</option>
     <option value="repair">Repair & Retrofit &lt;75% Damaged</option>
   </select>
-
   <label>Estimated Stories</label>
   <input id="manualStories" type="number" min="1" value="2">
-
   <h3>Building Information</h3>
   <table>
     <tr><td>Footprint Area</td><td id="area">--</td></tr>
     <tr><td>Stories</td><td id="stories">--</td></tr>
     <tr><td>Built Area</td><td id="built">--</td></tr>
   </table>
-
   <h3>Cost Breakdown</h3>
   <table>
     <tr><td>Base Construction</td><td id="baseCost">--</td></tr>
@@ -121,24 +110,20 @@
     <tr><td>Rubble Removal</td><td id="rubbleCost">--</td></tr>
     <tr><td>Engineering / Permits / Contingency</td><td id="engineeringCost">--</td></tr>
   </table>
-
   <h3>Total Estimate</h3>
   <p class="total" id="totalCost">--</p>
   <button id="downloadAllCSV">Download All Building Cost Table</button>
-<p id="downloadStatus"></p>
+  <p id="downloadStatus"></p>
 </div>
-
 <script>
 require([
   "esri/config",
   "esri/WebMap",
   "esri/views/MapView",
   "esri/geometry/geometryEngine",
-"esri/layers/FeatureLayer"
+  "esri/layers/FeatureLayer"
 ], function(esriConfig, WebMap, MapView, geometryEngine, FeatureLayer) {
-
   esriConfig.portalUrl = "https://gis.earthdata.nasa.gov/portal";
-
   const COSTS = {
     constructionPerM2: 684,
     structuralRepairPerM2: 80,
@@ -149,231 +134,166 @@ require([
     engineeringRebuildRate: 0.12,
     engineeringRepairRate: 0.10
   };
-
-  let currentArea = 0;
-
-  const webmap = new WebMap({
-    portalItem: {
-      id: "0c3d77dd5aae46e4829d9a282477615c"
-    }
+  const structuresLayer = new FeatureLayer({
+    url: "https://services7.arcgis.com/WSiUmUhlFx4CtMBB/ArcGIS/rest/services/202610_s1_likelydmgareas/FeatureServer/0",
+    outFields: ["*"]
   });
-
+  let currentArea = 0;
+  let selectedDamageProbability = 0;
+  let selectedLabel = "";
+  const webmap = new WebMap({
+    portalItem: { id: "0c3d77dd5aae46e4829d9a282477615c" }
+  });
   const view = new MapView({
     container: "viewDiv",
     map: webmap
   });
-
   function money(value) {
     return "$" + Math.round(value).toLocaleString();
   }
-
-  function calculateCosts() {
-    if (!currentArea) return;
-
-    const stories = Number(document.getElementById("manualStories").value) || 1;
-    const builtArea = currentArea * stories;
-    const workPackage = document.getElementById("workPackage").value;
-
-    let baseCost = 0;
-    let repairCost = 0;
-    let retrofitCost = 0;
-    let isolatorCost = 0;
-    let damperCost = 0;
-    let rubbleCost = 0;
-    let engineeringCost = 0;
-    let total = 0;
-
-    if (workPackage === "rebuild") {
+  function computeCost(areaM2, stories, label, damageProbability, manualWorkPackage) {
+    const builtArea = areaM2 * stories;
+    let isRed = damageProbability >= 0.75 || label === "likely_damaged";
+    if (manualWorkPackage === "rebuild") isRed = true;
+    if (manualWorkPackage === "repair") isRed = false;
+    let baseCost = 0, repairCost = 0, retrofitCost = 0, isolatorCost = 0;
+    let damperCost = 0, rubbleCost = 0, engineeringCost = 0, totalCost = 0;
+    let workPackage = "";
+    if (isRed) {
+      workPackage = "Demolish & Rebuild";
       baseCost = builtArea * COSTS.constructionPerM2;
       isolatorCost = COSTS.baseIsolationPerBuilding;
       damperCost = COSTS.dampersPerBuilding;
       rubbleCost = COSTS.rubbleRemovalPerBuilding;
-
       const hardCost = baseCost + isolatorCost + damperCost + rubbleCost;
       engineeringCost = hardCost * COSTS.engineeringRebuildRate;
-      total = hardCost + engineeringCost;
-    }
-
-    if (workPackage === "repair") {
+      totalCost = hardCost + engineeringCost;
+    } else {
+      workPackage = "Repair & Retrofit";
       repairCost = builtArea * COSTS.structuralRepairPerM2;
       retrofitCost = builtArea * COSTS.seismicRetrofitPerM2;
-
       const hardCost = repairCost + retrofitCost;
       engineeringCost = hardCost * COSTS.engineeringRepairRate;
-      total = hardCost + engineeringCost;
+      totalCost = hardCost + engineeringCost;
     }
-
+    return { builtArea, workPackage, baseCost, repairCost, retrofitCost, isolatorCost, damperCost, rubbleCost, engineeringCost, totalCost };
+  }
+  function calculateCosts() {
+    if (!currentArea) return;
+    const stories = Number(document.getElementById("manualStories").value) || 1;
+    const manualWorkPackage = document.getElementById("workPackage").value;
+    const result = computeCost(currentArea, stories, selectedLabel, selectedDamageProbability, manualWorkPackage);
     document.getElementById("area").innerHTML = currentArea.toFixed(1) + " m²";
     document.getElementById("stories").innerHTML = stories;
-    document.getElementById("built").innerHTML = builtArea.toFixed(1) + " m²";
-
-    document.getElementById("baseCost").innerHTML = money(baseCost);
-    document.getElementById("repairCost").innerHTML = money(repairCost);
-    document.getElementById("retrofitCost").innerHTML = money(retrofitCost);
-    document.getElementById("isolatorCost").innerHTML = money(isolatorCost);
-    document.getElementById("damperCost").innerHTML = money(damperCost);
-    document.getElementById("rubbleCost").innerHTML = money(rubbleCost);
-    document.getElementById("engineeringCost").innerHTML = money(engineeringCost);
-    document.getElementById("totalCost").innerHTML = money(total);
+    document.getElementById("built").innerHTML = result.builtArea.toFixed(1) + " m²";
+    document.getElementById("baseCost").innerHTML = money(result.baseCost);
+    document.getElementById("repairCost").innerHTML = money(result.repairCost);
+    document.getElementById("retrofitCost").innerHTML = money(result.retrofitCost);
+    document.getElementById("isolatorCost").innerHTML = money(result.isolatorCost);
+    document.getElementById("damperCost").innerHTML = money(result.damperCost);
+    document.getElementById("rubbleCost").innerHTML = money(result.rubbleCost);
+    document.getElementById("engineeringCost").innerHTML = money(result.engineeringCost);
+    document.getElementById("totalCost").innerHTML = money(result.totalCost);
   }
-
   view.on("click", async function(event) {
     const response = await view.hitTest(event);
-
-    const result = response.results.find(r =>
-      r.graphic &&
-      r.graphic.geometry &&
-      r.graphic.geometry.type === "polygon"
-    );
-
+    const result = response.results.find(r => r.graphic && r.graphic.geometry && r.graphic.geometry.type === "polygon");
     if (!result) return;
-
-    const polygon = result.graphic.geometry;
-
-    currentArea = Math.abs(
-      geometryEngine.geodesicArea(polygon, "square-meters")
-    );
-
+    const attributes = result.graphic.attributes || {};
+    selectedLabel = attributes.label || "";
+    selectedDamageProbability = Number(attributes.damage_probability) || 0;
+    if (selectedDamageProbability >= 0.75 || selectedLabel === "likely_damaged") {
+      document.getElementById("workPackage").value = "rebuild";
+    } else {
+      document.getElementById("workPackage").value = "repair";
+    }
+    currentArea = Math.abs(geometryEngine.geodesicArea(result.graphic.geometry, "square-meters"));
     calculateCosts();
   });
-
   document.getElementById("workPackage").addEventListener("change", calculateCosts);
   document.getElementById("manualStories").addEventListener("input", calculateCosts);
-async function downloadAllBuildingsCSV() {
-  document.getElementById("downloadStatus").innerHTML = "Preparing table...";
-
-  await webmap.loadAll();
-
-  const layers = webmap.layers.items.filter(layer =>
-    layer.type === "feature"
-  );
-
-  let allRows = [];
-
-  for (const layer of layers) {
-    await layer.load();
-
-    const hasDamageField = layer.fields.some(f =>
-      f.name === "damage_probability" || f.name === "label"
-    );
-
-    if (!hasDamageField) continue;
-
-    const query = layer.createQuery();
+  async function downloadAllBuildingsCSV() {
+    const status = document.getElementById("downloadStatus");
+    status.innerHTML = "Preparing CSV... this may take a minute.";
+    await structuresLayer.load();
+    const query = structuresLayer.createQuery();
     query.where = "1=1";
     query.outFields = ["*"];
     query.returnGeometry = true;
-
-    const count = await layer.queryFeatureCount(query);
-
+    const count = await structuresLayer.queryFeatureCount(query);
+    const rows = [];
+    let count75 = 0, count64 = 0, count0 = 0;
+    let cost75 = 0, cost64 = 0, cost0 = 0;
+    const stories = Number(document.getElementById("manualStories").value) || 2;
     for (let start = 0; start < count; start += 2000) {
       query.start = start;
       query.num = 2000;
-
-      const result = await layer.queryFeatures(query);
-
-      result.features.forEach(feature => {
-        const areaM2 = Math.abs(
-          geometryEngine.geodesicArea(feature.geometry, "square-meters")
-        );
-
-        const areaFt2 = areaM2 * 10.7639;
-
-        const stories = 2;
-        const builtArea = areaM2 * stories;
-
-        const label = feature.attributes.label || "not_damaged";
-        const damageProbability = Number(feature.attributes.damage_probability) || 0;
-
-        const workPackage =
-          damageProbability >= 0.75 || label === "likely_damaged"
-            ? "Demolish & Rebuild"
-            : "Repair & Retrofit";
-
-        let baseCost = 0;
-        let repairCost = 0;
-        let retrofitCost = 0;
-        let isolatorCost = 0;
-        let damperCost = 0;
-        let rubbleCost = 0;
-        let engineeringCost = 0;
-        let totalCost = 0;
-
-        if (workPackage === "Demolish & Rebuild") {
-          baseCost = builtArea * COSTS.constructionPerM2;
-          isolatorCost = COSTS.baseIsolationPerBuilding;
-          damperCost = COSTS.dampersPerBuilding;
-          rubbleCost = COSTS.rubbleRemovalPerBuilding;
-
-          const hardCost = baseCost + isolatorCost + damperCost + rubbleCost;
-          engineeringCost = hardCost * COSTS.engineeringRebuildRate;
-          totalCost = hardCost + engineeringCost;
+      const featureSet = await structuresLayer.queryFeatures(query);
+      featureSet.features.forEach(feature => {
+        const attributes = feature.attributes || {};
+        const areaM2 = Math.abs(geometryEngine.geodesicArea(feature.geometry, "square-meters"));
+        const label = attributes.label || "";
+        const damageProbability = Number(attributes.damage_probability) || 0;
+        const result = computeCost(areaM2, stories, label, damageProbability, null);
+        if (damageProbability >= 0.75 || label === "likely_damaged") {
+          count75++;
+          cost75 += result.totalCost;
+        } else if (damageProbability === 0) {
+          count0++;
+          cost0 += result.totalCost;
         } else {
-          repairCost = builtArea * COSTS.structuralRepairPerM2;
-          retrofitCost = builtArea * COSTS.seismicRetrofitPerM2;
-
-          const hardCost = repairCost + retrofitCost;
-          engineeringCost = hardCost * COSTS.engineeringRepairRate;
-          totalCost = hardCost + engineeringCost;
+          count64++;
+          cost64 += result.totalCost;
         }
-
-        allRows.push({
-          overture_id: feature.attributes.overture_id || "",
-          label,
+        rows.push({
+          overture_id: attributes.overture_id || "",
+          label: label,
           damage_probability: damageProbability,
           footprint_m2: areaM2.toFixed(1),
-          footprint_ft2: areaFt2.toFixed(1),
+          footprint_ft2: (areaM2 * 10.7639).toFixed(1),
           assumed_stories: stories,
-          built_area_m2: builtArea.toFixed(1),
-          work_package: workPackage,
-          base_construction: Math.round(baseCost),
-          structural_repairs: Math.round(repairCost),
-          seismic_retrofit: Math.round(retrofitCost),
-          base_isolation: Math.round(isolatorCost),
-          energy_dampers: Math.round(damperCost),
-          rubble_removal: Math.round(rubbleCost),
-          engineering_contingency: Math.round(engineeringCost),
-          total_cost: Math.round(totalCost)
+          built_area_m2: result.builtArea.toFixed(1),
+          work_package: result.workPackage,
+          base_construction: Math.round(result.baseCost),
+          structural_repairs: Math.round(result.repairCost),
+          seismic_retrofit: Math.round(result.retrofitCost),
+          base_isolation: Math.round(result.isolatorCost),
+          energy_dampers: Math.round(result.damperCost),
+          rubble_removal: Math.round(result.rubbleCost),
+          engineering_contingency: Math.round(result.engineeringCost),
+          total_cost: Math.round(result.totalCost)
         });
       });
+      status.innerHTML = "Processed " + Math.min(start + 2000, count).toLocaleString() + " of " + count.toLocaleString() + " buildings...";
     }
+    document.getElementById("count75").innerHTML = count75.toLocaleString();
+    document.getElementById("count64").innerHTML = count64.toLocaleString();
+    document.getElementById("count0").innerHTML = count0.toLocaleString();
+    document.getElementById("cost75").innerHTML = money(cost75);
+    document.getElementById("cost64").innerHTML = money(cost64);
+    document.getElementById("cost0").innerHTML = money(cost0);
+    document.getElementById("grandTotal").innerHTML = money(cost75 + cost64 + cost0);
+    if (rows.length === 0) {
+      status.innerHTML = "No building records found.";
+      return;
+    }
+    const headers = Object.keys(rows[0]);
+    const csv = [
+      headers.join(","),
+      ...rows.map(row => headers.map(h => `"${String(row[h]).replaceAll('"', '""')}"`).join(","))
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "all_building_cost_estimates.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+    const total = rows.reduce((sum, row) => sum + Number(row.total_cost), 0);
+    status.innerHTML = "Downloaded " + rows.length.toLocaleString() + " buildings. Total estimated cost: " + money(total);
   }
-
-  if (allRows.length === 0) {
-    document.getElementById("downloadStatus").innerHTML = "No building records found.";
-    return;
-  }
-
-  const headers = Object.keys(allRows[0]);
-
-  const csv = [
-    headers.join(","),
-    ...allRows.map(row =>
-      headers.map(h => `"${row[h]}"`).join(",")
-    )
-  ].join("\n");
-
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "all_building_cost_estimates.csv";
-  link.click();
-
-  URL.revokeObjectURL(url);
-
-  const totalProgramCost = allRows.reduce((sum, row) => sum + Number(row.total_cost), 0);
-
-  document.getElementById("downloadStatus").innerHTML =
-    "Downloaded " + allRows.length.toLocaleString() +
-    " buildings. Total estimated cost: $" +
-    Math.round(totalProgramCost).toLocaleString();
-}
-
-document.getElementById("downloadAllCSV").addEventListener("click", downloadAllBuildingsCSV);
+  document.getElementById("downloadAllCSV").addEventListener("click", downloadAllBuildingsCSV);
 });
 </script>
-
 </body>
 </html>
