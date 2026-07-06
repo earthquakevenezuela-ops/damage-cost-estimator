@@ -10,79 +10,36 @@
   <script src="https://js.arcgis.com/4.30/"></script>
 
   <style>
-    html, body, #viewDiv {
-      height: 100%;
-      width: 100%;
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-    }
+    html, body, #viewDiv { height: 100%; width: 100%; margin: 0; font-family: Arial, Helvetica, sans-serif; }
 
     #panel {
-      position: absolute;
-      top: 15px;
-      right: 15px;
-      width: 390px;
-      max-height: 92vh;
-      overflow-y: auto;
-      background: white;
-      padding: 16px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,.3);
-      z-index: 100;
+      position: absolute; top: 15px; right: 15px; width: 410px; max-height: 92vh;
+      overflow-y: auto; background: white; padding: 16px; border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.3); z-index: 100;
     }
 
     h2 { margin-top: 0; }
     h3 { margin-bottom: 6px; }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
 
-    td {
-      padding: 6px 0;
-      border-bottom: 1px solid #ddd;
-    }
+    td { padding: 6px 0; border-bottom: 1px solid #ddd; vertical-align: top; }
+    td:last-child { text-align: right; font-weight: bold; }
 
-    td:last-child {
-      text-align: right;
-      font-weight: bold;
-    }
-
-    .total {
-      font-size: 18px;
-      font-weight: bold;
-      color: #111;
-    }
+    .total { font-size: 18px; font-weight: bold; color: #111; }
 
     select, input, button {
-      width: 100%;
-      padding: 6px;
-      margin-top: 4px;
-      margin-bottom: 8px;
-      box-sizing: border-box;
+      width: 100%; padding: 6px; margin-top: 4px; margin-bottom: 8px; box-sizing: border-box;
     }
 
     .summary-box {
-      background:#f3f3f3;
-      padding:10px;
-      margin-bottom:10px;
-      border-radius:6px;
-      font-size: 14px;
+      background:#f3f3f3; padding:10px; margin-bottom:10px; border-radius:6px; font-size: 14px;
     }
 
-    @media (max-width:700px) {
-      #panel {
-        left:10px;
-        right:10px;
-        top:auto;
-        bottom:10px;
-        width:auto;
-        max-height:45vh;
-        padding:12px;
-      }
+    #downloadStatus { font-size: 12px; color: #444; line-height: 1.4; }
 
+    @media (max-width:700px) {
+      #panel { left:10px; right:10px; top:auto; bottom:10px; width:auto; max-height:45vh; padding:12px; }
       h2 { font-size:18px; }
       h3 { font-size:15px; }
       table { font-size:12px; }
@@ -99,22 +56,39 @@
   <p>Click a building to estimate reconstruction cost.</p>
 
   <div class="summary-box">
-    <b>Damage Summary</b><br><br>
+    <b>Program Summary</b><br><br>
 
-    <b>Demolish & Rebuild (≥75%)</b><br>
-Buildings: <span id="count75">--</span><br>
-Estimated Cost: <span id="cost75">--</span><br><br>
+    <table>
+      <tr>
+        <td><b>Damage Category</b></td>
+        <td><b>Buildings</b></td>
+        <td><b>Estimated Cost</b></td>
+      </tr>
 
-<b>Repair & Retrofit (1–74%)</b><br>
-Buildings: <span id="count64">--</span><br>
-Estimated Cost: <span id="cost64">--</span><br><br>
+      <tr>
+        <td>≥75% Damage<br>Demolish & Rebuild</td>
+        <td id="count75">--</td>
+        <td id="cost75">--</td>
+      </tr>
 
-<b>No Damage (0%)</b><br>
-Buildings: <span id="count0">--</span><br>
-Estimated Cost: <span id="cost0">$0</span><br><br>
+      <tr>
+        <td>1–74% Damage<br>Repair & Retrofit</td>
+        <td id="count64">--</td>
+        <td id="cost64">--</td>
+      </tr>
 
-<b>Total Reconstruction Program</b><br>
-<span id="grandTotal">--</span>
+      <tr>
+        <td>0% Damage<br>No Reconstruction</td>
+        <td id="count0">--</td>
+        <td id="cost0">$0</td>
+      </tr>
+
+      <tr>
+        <td><b>Total</b></td>
+        <td id="totalBuildings">--</td>
+        <td id="grandTotal">--</td>
+      </tr>
+    </table>
   </div>
 
   <label>Work Package</label>
@@ -132,6 +106,7 @@ Estimated Cost: <span id="cost0">$0</span><br><br>
     <tr><td>Footprint Area ft²</td><td id="areaFt">--</td></tr>
     <tr><td>Stories</td><td id="stories">--</td></tr>
     <tr><td>Built Area</td><td id="built">--</td></tr>
+    <tr><td>Damage Probability</td><td id="clickedDamage">--</td></tr>
   </table>
 
   <h3>Cost Breakdown</h3>
@@ -149,7 +124,7 @@ Estimated Cost: <span id="cost0">$0</span><br><br>
   <p class="total" id="totalCost">--</p>
 
   <button id="downloadAllCSV">Download All Building Cost Table</button>
-  <p id="downloadStatus">Loading building counts...</p>
+  <p id="downloadStatus">Loading program summary...</p>
 </div>
 
 <script>
@@ -184,36 +159,30 @@ require([
   let selectedDamageProbability = 0;
 
   const webmap = new WebMap({
-    portalItem: {
-      id: "0c3d77dd5aae46e4829d9a282477615c"
-    }
+    portalItem: { id: "0c3d77dd5aae46e4829d9a282477615c" }
   });
 
-  const view = new MapView({
-    container: "viewDiv",
-    map: webmap
-  });
+  const view = new MapView({ container: "viewDiv", map: webmap });
 
   function money(value) {
     return "$" + Math.round(value).toLocaleString();
   }
 
+  function pct(value) {
+    const num = Number(value);
+    if (isNaN(num)) return "--";
+    return (num * 100).toFixed(0) + "%";
+  }
+
   function computeCost(areaM2, stories, label, damageProbability, manualWorkPackage) {
     const builtArea = areaM2 * stories;
-
     let isRebuild = damageProbability >= 0.75 || label === "likely_damaged";
 
     if (manualWorkPackage === "rebuild") isRebuild = true;
     if (manualWorkPackage === "repair") isRebuild = false;
 
-    let baseCost = 0;
-    let repairCost = 0;
-    let retrofitCost = 0;
-    let isolatorCost = 0;
-    let damperCost = 0;
-    let rubbleCost = 0;
-    let engineeringCost = 0;
-    let totalCost = 0;
+    let baseCost = 0, repairCost = 0, retrofitCost = 0, isolatorCost = 0;
+    let damperCost = 0, rubbleCost = 0, engineeringCost = 0, totalCost = 0;
     let workPackage = "";
 
     if (isRebuild) {
@@ -222,7 +191,6 @@ require([
       isolatorCost = COSTS.baseIsolationPerBuilding;
       damperCost = COSTS.dampersPerBuilding;
       rubbleCost = COSTS.rubbleRemovalPerBuilding;
-
       const hardCost = baseCost + isolatorCost + damperCost + rubbleCost;
       engineeringCost = hardCost * COSTS.engineeringRebuildRate;
       totalCost = hardCost + engineeringCost;
@@ -230,44 +198,26 @@ require([
       workPackage = "Repair & Retrofit";
       repairCost = builtArea * COSTS.structuralRepairPerM2;
       retrofitCost = builtArea * COSTS.seismicRetrofitPerM2;
-
       const hardCost = repairCost + retrofitCost;
       engineeringCost = hardCost * COSTS.engineeringRepairRate;
       totalCost = hardCost + engineeringCost;
     }
 
-    return {
-      builtArea,
-      workPackage,
-      baseCost,
-      repairCost,
-      retrofitCost,
-      isolatorCost,
-      damperCost,
-      rubbleCost,
-      engineeringCost,
-      totalCost
-    };
+    return { builtArea, workPackage, baseCost, repairCost, retrofitCost, isolatorCost, damperCost, rubbleCost, engineeringCost, totalCost };
   }
 
-  function calculateCosts() {
+  function updateClickedBuildingPanel() {
     if (!currentArea) return;
 
     const stories = Number(document.getElementById("manualStories").value) || 1;
     const manualWorkPackage = document.getElementById("workPackage").value;
-
-    const result = computeCost(
-      currentArea,
-      stories,
-      selectedLabel,
-      selectedDamageProbability,
-      manualWorkPackage
-    );
+    const result = computeCost(currentArea, stories, selectedLabel, selectedDamageProbability, manualWorkPackage);
 
     document.getElementById("area").innerHTML = currentArea.toFixed(1) + " m²";
     document.getElementById("areaFt").innerHTML = (currentArea * 10.7639).toFixed(1) + " ft²";
     document.getElementById("stories").innerHTML = stories;
     document.getElementById("built").innerHTML = result.builtArea.toFixed(1) + " m²";
+    document.getElementById("clickedDamage").innerHTML = pct(selectedDamageProbability);
 
     document.getElementById("baseCost").innerHTML = money(result.baseCost);
     document.getElementById("repairCost").innerHTML = money(result.repairCost);
@@ -279,70 +229,22 @@ require([
     document.getElementById("totalCost").innerHTML = money(result.totalCost);
   }
 
-  view.on("click", async function(event) {
-    const response = await view.hitTest(event);
-
-    const result = response.results.find(r =>
-      r.graphic &&
-      r.graphic.geometry &&
-      r.graphic.geometry.type === "polygon"
-    );
-
-    if (!result) return;
-
-    const attributes = result.graphic.attributes || {};
-    selectedLabel = attributes.label || "";
-    selectedDamageProbability = Number(attributes.damage_probability) || 0;
-
-    if (selectedDamageProbability >= 0.75 || selectedLabel === "likely_damaged") {
-      document.getElementById("workPackage").value = "rebuild";
-    } else {
-      document.getElementById("workPackage").value = "repair";
-    }
-
-    currentArea = Math.abs(
-      geometryEngine.geodesicArea(result.graphic.geometry, "square-meters")
-    );
-
-    calculateCosts();
-  });
-
-  document.getElementById("workPackage").addEventListener("change", calculateCosts);
-  document.getElementById("manualStories").addEventListener("input", calculateCosts);
-
-  async function loadDamageCountsOnly() {
-    try {
-      await structuresLayer.load();
-
-      const q75 = structuresLayer.createQuery();
-      q75.where = "damage_probability >= 0.75";
-
-      const q64 = structuresLayer.createQuery();
-      q64.where = "damage_probability > 0 AND damage_probability < 0.75";
-
-      const q0 = structuresLayer.createQuery();
-      q0.where = "damage_probability = 0";
-
-      const count75 = await structuresLayer.queryFeatureCount(q75);
-      const count64 = await structuresLayer.queryFeatureCount(q64);
-      const count0 = await structuresLayer.queryFeatureCount(q0);
-
-      document.getElementById("count75").innerHTML = count75.toLocaleString();
-      document.getElementById("count64").innerHTML = count64.toLocaleString();
-      document.getElementById("count0").innerHTML = count0.toLocaleString();
-
-      document.getElementById("downloadStatus").innerHTML =
-        "Counts loaded. Click the button to calculate costs and download CSV.";
-    } catch (error) {
-      document.getElementById("downloadStatus").innerHTML =
-        "Could not load counts. Try refreshing the page.";
-      console.error(error);
-    }
+  function updateSummaryDisplay(summary) {
+    document.getElementById("count75").innerHTML = summary.count75.toLocaleString();
+    document.getElementById("count64").innerHTML = summary.count64.toLocaleString();
+    document.getElementById("count0").innerHTML = summary.count0.toLocaleString();
+    document.getElementById("totalBuildings").innerHTML =
+      (summary.count75 + summary.count64 + summary.count0).toLocaleString();
+    document.getElementById("cost75").innerHTML = money(summary.cost75);
+    document.getElementById("cost64").innerHTML = money(summary.cost64);
+    document.getElementById("cost0").innerHTML = money(summary.cost0);
+    document.getElementById("grandTotal").innerHTML =
+      money(summary.cost75 + summary.cost64 + summary.cost0);
   }
 
-  async function downloadAllBuildingsCSV() {
+  async function buildRowsAndSummary(makeCsv) {
     const status = document.getElementById("downloadStatus");
-    status.innerHTML = "Preparing CSV... this may take a minute.";
+    status.innerHTML = makeCsv ? "Preparing CSV... this may take a minute." : "Calculating program summary...";
 
     await structuresLayer.load();
 
@@ -353,15 +255,7 @@ require([
 
     const count = await structuresLayer.queryFeatureCount(query);
     const rows = [];
-
-    let count75 = 0;
-    let count64 = 0;
-    let count0 = 0;
-
-    let cost75 = 0;
-    let cost64 = 0;
-    let cost0 = 0;
-
+    const summary = { count75: 0, count64: 0, count0: 0, cost75: 0, cost64: 0, cost0: 0 };
     const stories = Number(document.getElementById("manualStories").value) || 2;
 
     for (let start = 0; start < count; start += 2000) {
@@ -372,99 +266,138 @@ require([
 
       featureSet.features.forEach(feature => {
         const attributes = feature.attributes || {};
+        const geometry = feature.geometry;
+        if (!geometry) return;
 
-        const areaM2 = Math.abs(
-          geometryEngine.geodesicArea(feature.geometry, "square-meters")
-        );
-
+        const areaM2 = Math.abs(geometryEngine.geodesicArea(geometry, "square-meters"));
         const label = attributes.label || "";
         const damageProbability = Number(attributes.damage_probability) || 0;
-
         const result = computeCost(areaM2, stories, label, damageProbability, null);
 
         if (damageProbability >= 0.75 || label === "likely_damaged") {
-          count75++;
-          cost75 += result.totalCost;
+          summary.count75++;
+          summary.cost75 += result.totalCost;
         } else if (damageProbability === 0) {
-          count0++;
-          cost0 += result.totalCost;
+          summary.count0++;
+          summary.cost0 += 0;
         } else {
-          count64++;
-          cost64 += result.totalCost;
+          summary.count64++;
+          summary.cost64 += result.totalCost;
         }
 
-        rows.push({
-          overture_id: attributes.overture_id || "",
-          label: label,
-          damage_probability: damageProbability,
-          footprint_m2: areaM2.toFixed(1),
-          footprint_ft2: (areaM2 * 10.7639).toFixed(1),
-          assumed_stories: stories,
-          built_area_m2: result.builtArea.toFixed(1),
-          work_package: result.workPackage,
-          base_construction: Math.round(result.baseCost),
-          structural_repairs: Math.round(result.repairCost),
-          seismic_retrofit: Math.round(result.retrofitCost),
-          base_isolation: Math.round(result.isolatorCost),
-          energy_dampers: Math.round(result.damperCost),
-          rubble_removal: Math.round(result.rubbleCost),
-          engineering_contingency: Math.round(result.engineeringCost),
-          total_cost: Math.round(result.totalCost)
-        });
+        if (makeCsv) {
+          rows.push({
+            overture_id: attributes.overture_id || "",
+            label: label,
+            damage_probability: damageProbability,
+            footprint_m2: areaM2.toFixed(1),
+            footprint_ft2: (areaM2 * 10.7639).toFixed(1),
+            assumed_stories: stories,
+            built_area_m2: result.builtArea.toFixed(1),
+            work_package: result.workPackage,
+            base_construction: Math.round(result.baseCost),
+            structural_repairs: Math.round(result.repairCost),
+            seismic_retrofit: Math.round(result.retrofitCost),
+            base_isolation: Math.round(result.isolatorCost),
+            energy_dampers: Math.round(result.damperCost),
+            rubble_removal: Math.round(result.rubbleCost),
+            engineering_contingency: Math.round(result.engineeringCost),
+            total_cost: Math.round(result.totalCost)
+          });
+        }
       });
 
       status.innerHTML =
-        "Processed " + Math.min(start + 2000, count).toLocaleString() +
-        " of " + count.toLocaleString() + " buildings...";
+        (makeCsv ? "Processed " : "Calculated ") +
+        Math.min(start + 2000, count).toLocaleString() +
+        " of " + count.toLocaleString() +
+        " buildings...";
     }
 
-    document.getElementById("count75").innerHTML = count75.toLocaleString();
-    document.getElementById("count64").innerHTML = count64.toLocaleString();
-    document.getElementById("count0").innerHTML = count0.toLocaleString();
-
-    document.getElementById("cost75").innerHTML = money(cost75);
-    document.getElementById("cost64").innerHTML = money(cost64);
-    document.getElementById("cost0").innerHTML = money(cost0);
-
-    document.getElementById("grandTotal").innerHTML =
-      money(cost75 + cost64 + cost0).toLocaleString();
-
-    if (rows.length === 0) {
-      status.innerHTML = "No building records found.";
-      return;
-    }
-
-    const headers = Object.keys(rows[0]);
-
-    const csv = [
-      headers.join(","),
-      ...rows.map(row =>
-        headers.map(h => `"${String(row[h]).replaceAll('"', '""')}"`).join(",")
-      )
-    ].join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "all_building_cost_estimates.csv";
-    link.click();
-
-    URL.revokeObjectURL(url);
-
-    const total = rows.reduce((sum, row) => sum + Number(row.total_cost), 0);
-
-    status.innerHTML =
-      "Downloaded " + rows.length.toLocaleString() +
-      " buildings. Total estimated cost: " +
-      money(total);
+    updateSummaryDisplay(summary);
+    return { rows: rows, summary: summary, totalCost: summary.cost75 + summary.cost64 + summary.cost0 };
   }
 
-  document.getElementById("downloadAllCSV")
-    .addEventListener("click", downloadAllBuildingsCSV);
- 
-  loadDamageCountsOnly();
+  async function calculateProgramSummary() {
+    try {
+      await buildRowsAndSummary(false);
+      document.getElementById("downloadStatus").innerHTML =
+        "Program summary calculated. Use the button to download the CSV.";
+    } catch (error) {
+      console.error(error);
+      document.getElementById("downloadStatus").innerHTML =
+        "Could not calculate program summary. Open Console for details.";
+    }
+  }
+
+  async function downloadAllBuildingsCSV() {
+    try {
+      const result = await buildRowsAndSummary(true);
+      const rows = result.rows;
+
+      if (rows.length === 0) {
+        document.getElementById("downloadStatus").innerHTML = "No building records found.";
+        return;
+      }
+
+      const headers = Object.keys(rows[0]);
+      const csv = [
+        headers.join(","),
+        ...rows.map(row =>
+          headers.map(h => `"${String(row[h]).replaceAll('"', '""')}"`).join(",")
+        )
+      ].join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "all_building_cost_estimates.csv";
+      link.click();
+
+      URL.revokeObjectURL(url);
+
+      document.getElementById("downloadStatus").innerHTML =
+        "Downloaded " + rows.length.toLocaleString() +
+        " buildings. Total estimated cost: " +
+        money(result.totalCost);
+    } catch (error) {
+      console.error(error);
+      document.getElementById("downloadStatus").innerHTML =
+        "Could not download CSV. Open Console for details.";
+    }
+  }
+
+  view.on("click", async function(event) {
+    const response = await view.hitTest(event);
+
+    const result = response.results.find(r =>
+      r.graphic && r.graphic.geometry && r.graphic.geometry.type === "polygon"
+    );
+
+    if (!result) return;
+
+    const attributes = result.graphic.attributes || {};
+    selectedLabel = attributes.label || "";
+    selectedDamageProbability = Number(attributes.damage_probability) || 0;
+
+    document.getElementById("workPackage").value =
+      (selectedDamageProbability >= 0.75 || selectedLabel === "likely_damaged") ? "rebuild" : "repair";
+
+    currentArea = Math.abs(geometryEngine.geodesicArea(result.graphic.geometry, "square-meters"));
+    updateClickedBuildingPanel();
+  });
+
+  document.getElementById("workPackage").addEventListener("change", updateClickedBuildingPanel);
+  document.getElementById("manualStories").addEventListener("input", function() {
+    updateClickedBuildingPanel();
+    calculateProgramSummary();
+  });
+
+  document.getElementById("downloadAllCSV").addEventListener("click", downloadAllBuildingsCSV);
+
+  calculateProgramSummary();
 });
 </script>
 
