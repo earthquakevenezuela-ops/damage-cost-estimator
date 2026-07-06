@@ -13,7 +13,7 @@
     html, body, #viewDiv { height: 100%; width: 100%; margin: 0; font-family: Arial, Helvetica, sans-serif; }
 
     #panel {
-      position: absolute; top: 15px; right: 15px; width: 410px; max-height: 92vh;
+      position: absolute; top: 15px; right: 15px; width: 430px; max-height: 92vh;
       overflow-y: auto; background: white; padding: 16px; border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0,0,0,.3); z-index: 100;
     }
@@ -27,12 +27,17 @@
     td:last-child { text-align: right; font-weight: bold; }
 
     .total { font-size: 18px; font-weight: bold; color: #111; }
+    .note  { font-size: 11px; color: #666; margin: 6px 0 0 0; }
 
     select, input, button {
       width: 100%; padding: 6px; margin-top: 4px; margin-bottom: 8px; box-sizing: border-box;
     }
 
     button:disabled { opacity: .5; cursor: not-allowed; }
+
+    .preset-row { display: flex; gap: 6px; margin-bottom: 4px; }
+    .preset-row button { flex: 1; margin: 0; cursor: pointer; background: #f3f3f3; border: 1px solid #bbb; border-radius: 4px; }
+    .preset-row button.active { background: #2b6cb0; color: #fff; border-color: #2b6cb0; font-weight: bold; }
 
     .summary-box {
       background:#f3f3f3; padding:10px; margin-bottom:10px; border-radius:6px; font-size: 14px;
@@ -58,49 +63,78 @@
   <p>Click a building to estimate reconstruction cost.</p>
 
   <div class="summary-box">
-    <b>Program Summary</b><br><br>
+    <b>Program Cost Scenarios</b><br><br>
 
     <table>
       <tr>
-        <td><b>Damage Category</b></td>
+        <td><b>Scenario (detection confidence)</b></td>
         <td><b>Buildings</b></td>
         <td><b>Estimated Cost</b></td>
       </tr>
 
       <tr>
-        <td>&ge;75% Damage<br>Demolish &amp; Rebuild</td>
-        <td id="count75">--</td>
-        <td id="cost75">--</td>
+        <td>Conservative<br>high_confidence only (z&ge;3)</td>
+        <td id="countHC">--</td>
+        <td id="costHC">--</td>
       </tr>
 
       <tr>
-        <td>1&ndash;74% Damage (yellow/orange)<br>Repair &amp; Retrofit</td>
-        <td id="count64">--</td>
-        <td id="cost64">--</td>
+        <td><b>Central</b><br>+ probable (z&ge;2, official damage layer)</td>
+        <td id="countCentral">--</td>
+        <td id="costCentral">--</td>
       </tr>
 
       <tr>
-        <td>&le;1% Damage (white)<br>No Reconstruction</td>
-        <td id="count0">--</td>
-        <td id="cost0">$0</td>
+        <td>Upper bound<br>+ possible (z&ge;1.5)</td>
+        <td id="countUpper">--</td>
+        <td id="costUpper">--</td>
       </tr>
 
       <tr>
-        <td><b>Total</b></td>
-        <td id="totalBuildings">--</td>
-        <td id="grandTotal">--</td>
+        <td>Below detection floor<br>No coherence-loss signal</td>
+        <td id="countBelow">--</td>
+        <td>$0</td>
+      </tr>
+
+      <tr>
+        <td>Not assessed<br>No usable radar coverage</td>
+        <td id="countNA">--</td>
+        <td>&mdash;</td>
       </tr>
     </table>
+
+    <p class="note">
+      Scenarios are cumulative (each row includes the rows above it).
+      Confidence tiers measure detection certainty, not damage severity;
+      severity is set by the rebuild-share assumption below.
+      "Not assessed" buildings are excluded from all cost figures &mdash;
+      absence of coverage is not evidence of no damage.
+    </p>
   </div>
 
-  <label>Work Package</label>
-  <select id="workPackage">
-    <option value="rebuild">Demolish &amp; Rebuild &ge;75% Damaged</option>
-    <option value="repair">Repair &amp; Retrofit &lt;75% Damaged</option>
-  </select>
+  <label>Fraction of total losses needing demolition (%)</label>
+  <div class="preset-row">
+    <button type="button" class="presetShare" data-value="20">20%</button>
+    <button type="button" class="presetShare active" data-value="25">25%</button>
+    <button type="button" class="presetShare" data-value="30">30%</button>
+  </div>
+  <input id="rebuildShare" type="number" min="0" max="100" value="25">
+  <p class="note">
+    Share of detected buildings priced as total losses (demolish &amp;
+    rebuild); the remainder are priced for repair &amp; retrofit. Default 25%
+    from the Copernicus EMS crosswalk (695 destroyed of 3,072 graded
+    detections, with a near-identical severity mix in every tier). Use the
+    presets or type any value.
+  </p>
 
   <label>Estimated Stories</label>
   <input id="manualStories" type="number" min="1" value="2">
+
+  <label>Work Package (clicked building)</label>
+  <select id="workPackage">
+    <option value="repair" selected>Repair &amp; Retrofit</option>
+    <option value="rebuild">Demolish &amp; Rebuild</option>
+  </select>
 
   <h3>Building Information</h3>
   <table>
@@ -108,7 +142,9 @@
     <tr><td>Footprint Area ft&sup2;</td><td id="areaFt">--</td></tr>
     <tr><td>Stories</td><td id="stories">--</td></tr>
     <tr><td>Built Area</td><td id="built">--</td></tr>
-    <tr><td>Damage Probability</td><td id="clickedDamage">--</td></tr>
+    <tr><td>Damage Detected</td><td id="clickedDamage">--</td></tr>
+    <tr><td>Confidence Tier</td><td id="clickedTier">--</td></tr>
+    <tr><td>Radar Coverage</td><td id="clickedCoverage">--</td></tr>
   </table>
 
   <h3>Cost Breakdown</h3>
@@ -122,18 +158,18 @@
     <tr><td>Engineering / Permits / Contingency</td><td id="engineeringCost">--</td></tr>
   </table>
 
-  <h3>Total Estimate</h3>
+  <h3>Total Estimate (clicked building)</h3>
   <p class="total" id="totalCost">--</p>
 
   <button id="downloadAllCSV">Download All Building Cost Table</button>
-  <p id="downloadStatus">Loading program summary...</p>
+  <p id="downloadStatus">Loading program scenarios...</p>
 </div>
 
 <script>
 // The ArcGIS JS API script tag in <head> (https://js.arcgis.com/4.30/) is what
-// defines the global require() used below. If that tag is missing, moved below
-// this script, or blocked, require is undefined - so the app start is wrapped
-// and guarded at the bottom of this file instead of calling require directly.
+// defines the global require() used below. The app start is wrapped and
+// guarded at the bottom of this file so a missing/blocked API script produces
+// a readable message instead of "ReferenceError: require is not defined".
 function startApp() {
 
 require([
@@ -146,6 +182,32 @@ require([
 
   esriConfig.portalUrl = "https://gis.earthdata.nasa.gov/portal";
 
+  // -------------------------------------------------------------------
+  // DATA CONFIGURATION - update these when the v1 tier data is published
+  // as a hosted feature service (the URL below is the old probability-era
+  // service; replace it with the republished EMSR884_damage_20260701_v1
+  // layer URL).
+  // -------------------------------------------------------------------
+  const LAYER_URL =
+    "https://services7.arcgis.com/WSiUmUhlFx4CtMBB/ArcGIS/rest/services/202610_s1_likelydmgareas/FeatureServer/0";
+
+  const F_TIER = "damage_confidence"; // possible | probable | high_confidence | below_floor | NA
+  const F_DAMAGE = "damage";          // 1 = likely damaged/destroyed, 0 = undamaged
+  const F_COVERAGE = "coverage_fraction";
+  const F_ID = "id";                  // per-building identifier column for the CSV
+
+  // Cumulative detection-confidence scenarios. Central (z>=2) equals the
+  // release's official binary damage layer, so countCentral should
+  // reproduce the headline building count (69,431 in delivery v1) - a
+  // built-in sanity check that the queries match the README.
+  const SCENARIOS = {
+    hc:      F_TIER + " = 'high_confidence'",
+    central: F_TIER + " IN ('high_confidence','probable')",
+    upper:   F_TIER + " IN ('high_confidence','probable','possible')"
+  };
+  const WHERE_BELOW = F_TIER + " = 'below_floor'";
+  const WHERE_NA    = "(" + F_TIER + " = 'NA' OR " + F_TIER + " IS NULL)";
+
   const COSTS = {
     constructionPerM2: 684,
     structuralRepairPerM2: 80,
@@ -157,32 +219,11 @@ require([
     engineeringRepairRate: 0.10
   };
 
-  // SQL definitions of the three damage categories. These MUST partition the
-  // dataset (every building falls in exactly one) and match computeCost().
-  // Thresholds match the layer's own renderer: <=1% renders white
-  // ("Unlikely damaged"), 1-50% yellow, 50-75% orange, >=75% red.
-  const NO_WORK_MAX = 0.01;
-  const WHERE_REBUILD = "(damage_probability >= 0.75 OR label = 'likely_damaged')";
-  const WHERE_NONE =
-    "NOT " + WHERE_REBUILD +
-    " AND (damage_probability <= " + NO_WORK_MAX + " OR damage_probability IS NULL)";
-  const WHERE_REPAIR =
-    "NOT " + WHERE_REBUILD +
-    " AND damage_probability > " + NO_WORK_MAX + " AND damage_probability < 0.75";
-
-  const structuresLayer = new FeatureLayer({
-    url: "https://services7.arcgis.com/WSiUmUhlFx4CtMBB/ArcGIS/rest/services/202610_s1_likelydmgareas/FeatureServer/0",
-    outFields: ["*"]
-  });
+  const structuresLayer = new FeatureLayer({ url: LAYER_URL, outFields: ["*"] });
 
   let currentArea = 0;
-  let selectedLabel = "";
-  let selectedDamageProbability = 0;
-
-  // Conversion factor from the service's Shape__Area units to square meters.
-  // Determined empirically at startup (see calibrateAreaFactor), so the app
-  // works whether the layer stores areas in square degrees or square meters.
-  let areaFactor = null;
+  let selectedTier = "";
+  let areaFactor = null;   // Shape__Area units -> m2, calibrated at startup
   let oidField = "OBJECTID";
   let csvRunning = false;
 
@@ -194,12 +235,6 @@ require([
 
   function money(value) {
     return "$" + Math.round(value).toLocaleString();
-  }
-
-  function pct(value) {
-    const num = Number(value);
-    if (isNaN(num)) return "--";
-    return (num * 100).toFixed(0) + "%";
   }
 
   function setStatus(text) {
@@ -214,19 +249,23 @@ require([
     };
   }
 
-  function computeCost(areaM2, stories, label, damageProbability, manualWorkPackage) {
+  function getRebuildShare() {
+    let pct = Number(document.getElementById("rebuildShare").value);
+    if (isNaN(pct)) pct = 25;
+    return Math.min(100, Math.max(0, pct)) / 100;
+  }
+
+  function getStories() {
+    return Number(document.getElementById("manualStories").value) || 2;
+  }
+
+  // Per-building cost for a single, explicit work package (clicked panel & CSV)
+  function computeCost(areaM2, stories, isRebuild) {
     const builtArea = areaM2 * stories;
-    let isRebuild = damageProbability >= 0.75 || label === "likely_damaged";
-
-    if (manualWorkPackage === "rebuild") isRebuild = true;
-    if (manualWorkPackage === "repair") isRebuild = false;
-
     let baseCost = 0, repairCost = 0, retrofitCost = 0, isolatorCost = 0;
     let damperCost = 0, rubbleCost = 0, engineeringCost = 0, totalCost = 0;
-    let workPackage = "";
 
     if (isRebuild) {
-      workPackage = "Demolish & Rebuild";
       baseCost = builtArea * COSTS.constructionPerM2;
       isolatorCost = COSTS.baseIsolationPerBuilding;
       damperCost = COSTS.dampersPerBuilding;
@@ -235,7 +274,6 @@ require([
       engineeringCost = hardCost * COSTS.engineeringRebuildRate;
       totalCost = hardCost + engineeringCost;
     } else {
-      workPackage = "Repair & Retrofit";
       repairCost = builtArea * COSTS.structuralRepairPerM2;
       retrofitCost = builtArea * COSTS.seismicRetrofitPerM2;
       const hardCost = repairCost + retrofitCost;
@@ -243,21 +281,38 @@ require([
       totalCost = hardCost + engineeringCost;
     }
 
-    return { builtArea, workPackage, baseCost, repairCost, retrofitCost, isolatorCost, damperCost, rubbleCost, engineeringCost, totalCost };
+    return { builtArea, baseCost, repairCost, retrofitCost, isolatorCost, damperCost, rubbleCost, engineeringCost, totalCost };
+  }
+
+  // Expected program cost for a population of n buildings with total
+  // footprint areaM2, of which rebuildShare are assumed total losses.
+  // All components are linear in area or per-building counts, so this
+  // equals summing the blended per-building expectation over the population.
+  function scenarioCost(n, areaM2, stories, rebuildShare) {
+    const rebuildHard =
+      areaM2 * rebuildShare * stories * COSTS.constructionPerM2 +
+      n * rebuildShare * (COSTS.baseIsolationPerBuilding +
+                          COSTS.dampersPerBuilding +
+                          COSTS.rubbleRemovalPerBuilding);
+    const repairHard =
+      areaM2 * (1 - rebuildShare) * stories *
+      (COSTS.structuralRepairPerM2 + COSTS.seismicRetrofitPerM2);
+
+    return rebuildHard * (1 + COSTS.engineeringRebuildRate) +
+           repairHard * (1 + COSTS.engineeringRepairRate);
   }
 
   function updateClickedBuildingPanel() {
     if (!currentArea) return;
 
-    const stories = Number(document.getElementById("manualStories").value) || 1;
-    const manualWorkPackage = document.getElementById("workPackage").value;
-    const result = computeCost(currentArea, stories, selectedLabel, selectedDamageProbability, manualWorkPackage);
+    const stories = getStories();
+    const isRebuild = document.getElementById("workPackage").value === "rebuild";
+    const result = computeCost(currentArea, stories, isRebuild);
 
     document.getElementById("area").innerHTML = currentArea.toFixed(1) + " m²";
     document.getElementById("areaFt").innerHTML = (currentArea * 10.7639).toFixed(1) + " ft²";
     document.getElementById("stories").innerHTML = stories;
     document.getElementById("built").innerHTML = result.builtArea.toFixed(1) + " m²";
-    document.getElementById("clickedDamage").innerHTML = pct(selectedDamageProbability);
 
     document.getElementById("baseCost").innerHTML = money(result.baseCost);
     document.getElementById("repairCost").innerHTML = money(result.repairCost);
@@ -269,34 +324,22 @@ require([
     document.getElementById("totalCost").innerHTML = money(result.totalCost);
   }
 
-  function updateSummaryDisplay(summary) {
-    document.getElementById("count75").innerHTML = summary.count75.toLocaleString();
-    document.getElementById("count64").innerHTML = summary.count64.toLocaleString();
-    document.getElementById("count0").innerHTML = summary.count0.toLocaleString();
-    document.getElementById("totalBuildings").innerHTML =
-      (summary.count75 + summary.count64 + summary.count0).toLocaleString();
-    document.getElementById("cost75").innerHTML = money(summary.cost75);
-    document.getElementById("cost64").innerHTML = money(summary.cost64);
-    document.getElementById("cost0").innerHTML = money(summary.cost0);
-    document.getElementById("grandTotal").innerHTML =
-      money(summary.cost75 + summary.cost64 + summary.cost0);
-  }
-
   // ---------------------------------------------------------------------
-  // Startup: load the layer once and work out how to convert Shape__Area
-  // (the area the server maintains for every polygon) into square meters.
-  // We sample a handful of features, compute their true geodesic area, and
-  // take the median ratio. This avoids ever downloading the full dataset's
-  // geometry just to measure footprints.
+  // Startup: calibrate the Shape__Area -> m2 conversion from a sample of
+  // features so no bulk geometry download is ever needed.
   // ---------------------------------------------------------------------
   async function initLayer() {
     await structuresLayer.load();
     oidField = structuresLayer.objectIdField || "OBJECTID";
 
-    const hasShapeArea = (structuresLayer.fields || [])
-      .some(f => f.name === "Shape__Area");
-    if (!hasShapeArea) {
+    const fieldNames = (structuresLayer.fields || []).map(f => f.name);
+    if (!fieldNames.includes("Shape__Area")) {
       throw new Error("Layer has no Shape__Area field - cannot compute fast summaries.");
+    }
+    if (!fieldNames.includes(F_TIER)) {
+      throw new Error("Layer has no '" + F_TIER + "' field. This app expects the " +
+        "v1 confidence-tier release; the configured service still uses the old schema. " +
+        "Update LAYER_URL once the new data is published as a feature service.");
     }
 
     const q = structuresLayer.createQuery();
@@ -308,10 +351,8 @@ require([
     const fs = await structuresLayer.queryFeatures(q);
     const ratios = fs.features
       .filter(f => f.geometry && f.attributes.Shape__Area > 0)
-      .map(f => {
-        const m2 = Math.abs(geometryEngine.geodesicArea(f.geometry, "square-meters"));
-        return m2 / f.attributes.Shape__Area;
-      })
+      .map(f => Math.abs(geometryEngine.geodesicArea(f.geometry, "square-meters")) /
+                f.attributes.Shape__Area)
       .sort((a, b) => a - b);
 
     if (!ratios.length) {
@@ -320,8 +361,8 @@ require([
     areaFactor = ratios[Math.floor(ratios.length / 2)]; // median
   }
 
-  // One small statistics request: count of buildings + total footprint area
-  // for a given WHERE clause. No geometry is transferred.
+  // One statistics request: building count + total footprint area for a
+  // WHERE clause. No geometry is transferred.
   async function statsFor(where) {
     const q = structuresLayer.createQuery();
     q.where = where;
@@ -338,50 +379,45 @@ require([
     };
   }
 
-  // Program summary from three tiny server-side queries. Because every cost
-  // component is either linear in area or a fixed per-building amount, the
-  // aggregate math below produces the same totals as summing computeCost()
-  // over every individual building.
-  async function calculateProgramSummary() {
-    setStatus("Calculating program summary...");
+  async function calculateScenarios() {
+    setStatus("Calculating cost scenarios...");
     try {
-      const stories = Number(document.getElementById("manualStories").value) || 2;
+      const stories = getStories();
+      const rebuildShare = getRebuildShare();
 
-      const [rebuild, repair, none] = await Promise.all([
-        statsFor(WHERE_REBUILD),
-        statsFor(WHERE_REPAIR),
-        statsFor(WHERE_NONE)
+      const [hc, central, upper, below, na] = await Promise.all([
+        statsFor(SCENARIOS.hc),
+        statsFor(SCENARIOS.central),
+        statsFor(SCENARIOS.upper),
+        statsFor(WHERE_BELOW),
+        statsFor(WHERE_NA)
       ]);
 
-      const rebuildHard =
-        rebuild.areaM2 * stories * COSTS.constructionPerM2 +
-        rebuild.n * (COSTS.baseIsolationPerBuilding +
-                     COSTS.dampersPerBuilding +
-                     COSTS.rubbleRemovalPerBuilding);
-      const cost75 = rebuildHard * (1 + COSTS.engineeringRebuildRate);
+      document.getElementById("countHC").innerHTML = hc.n.toLocaleString();
+      document.getElementById("countCentral").innerHTML = central.n.toLocaleString();
+      document.getElementById("countUpper").innerHTML = upper.n.toLocaleString();
+      document.getElementById("countBelow").innerHTML = below.n.toLocaleString();
+      document.getElementById("countNA").innerHTML = na.n.toLocaleString();
 
-      const repairHard =
-        repair.areaM2 * stories *
-        (COSTS.structuralRepairPerM2 + COSTS.seismicRetrofitPerM2);
-      const cost64 = repairHard * (1 + COSTS.engineeringRepairRate);
+      document.getElementById("costHC").innerHTML =
+        money(scenarioCost(hc.n, hc.areaM2, stories, rebuildShare));
+      document.getElementById("costCentral").innerHTML =
+        money(scenarioCost(central.n, central.areaM2, stories, rebuildShare));
+      document.getElementById("costUpper").innerHTML =
+        money(scenarioCost(upper.n, upper.areaM2, stories, rebuildShare));
 
-      updateSummaryDisplay({
-        count75: rebuild.n, count64: repair.n, count0: none.n,
-        cost75: cost75, cost64: cost64, cost0: 0
-      });
-
-      setStatus("Program summary calculated. Use the button to download the CSV.");
+      setStatus("Scenarios calculated. The Central row should match the " +
+        "release headline count; if it does not, check the field mapping.");
     } catch (error) {
       console.error(error);
-      setStatus("Could not calculate program summary: " +
+      setStatus("Could not calculate scenarios: " +
         (error && error.message ? error.message : "see Console for details."));
     }
   }
 
-  // CSV export: still one row per building, but with returnGeometry = false
-  // and only three attribute fields per feature, so pages are small and fast.
-  // Footprint area comes from Shape__Area * areaFactor instead of client-side
-  // geodesic measurement.
+  // CSV export: one row per building, attributes only (no geometry).
+  // Gives repair cost, rebuild cost, and the blended expected cost so any
+  // scenario can be re-aggregated in a spreadsheet.
   async function downloadAllBuildingsCSV() {
     if (csvRunning) return;
     csvRunning = true;
@@ -389,17 +425,17 @@ require([
     button.disabled = true;
 
     try {
-      const stories = Number(document.getElementById("manualStories").value) || 2;
+      const stories = getStories();
+      const rebuildShare = getRebuildShare();
 
       const query = structuresLayer.createQuery();
       query.where = "1=1";
-      query.outFields = ["overture_id", "label", "damage_probability", "Shape__Area"];
+      query.outFields = [F_ID, F_TIER, F_DAMAGE, F_COVERAGE, "Shape__Area"];
       query.returnGeometry = false;
       query.orderByFields = [oidField];
 
       const count = await structuresLayer.queryFeatureCount(query);
       const rows = [];
-      let totalCost = 0;
       const pageSize = 2000;
 
       for (let start = 0; start < count; start += pageSize) {
@@ -409,34 +445,30 @@ require([
         const featureSet = await structuresLayer.queryFeatures(query);
 
         featureSet.features.forEach(feature => {
-          const attributes = feature.attributes || {};
-          const areaM2 = (Number(attributes.Shape__Area) || 0) * areaFactor;
-          const label = attributes.label || "";
-          const damageProbability = Number(attributes.damage_probability) || 0;
+          const a = feature.attributes || {};
+          const areaM2 = (Number(a.Shape__Area) || 0) * areaFactor;
+          const tier = a[F_TIER] || "NA";
+          const detected = (tier === "probable" || tier === "high_confidence" ||
+                            tier === "possible");
 
-          const noWork = !(damageProbability >= 0.75 || label === "likely_damaged") &&
-                         damageProbability <= NO_WORK_MAX;
-          const result = computeCost(areaM2, stories, label, damageProbability, null);
-          const rowTotal = noWork ? 0 : result.totalCost;
-          totalCost += rowTotal;
+          const repair = computeCost(areaM2, stories, false);
+          const rebuild = computeCost(areaM2, stories, true);
+          const expected = detected
+            ? rebuildShare * rebuild.totalCost + (1 - rebuildShare) * repair.totalCost
+            : 0;
 
           rows.push({
-            overture_id: attributes.overture_id || "",
-            label: label,
-            damage_probability: damageProbability,
+            building_id: a[F_ID] !== undefined && a[F_ID] !== null ? a[F_ID] : "",
+            damage_confidence: tier,
+            damage: a[F_DAMAGE] !== undefined && a[F_DAMAGE] !== null ? a[F_DAMAGE] : "",
+            coverage_fraction: a[F_COVERAGE] !== undefined && a[F_COVERAGE] !== null ? a[F_COVERAGE] : "",
             footprint_m2: areaM2.toFixed(1),
-            footprint_ft2: (areaM2 * 10.7639).toFixed(1),
             assumed_stories: stories,
             built_area_m2: (areaM2 * stories).toFixed(1),
-            work_package: noWork ? "No Reconstruction" : result.workPackage,
-            base_construction: noWork ? 0 : Math.round(result.baseCost),
-            structural_repairs: noWork ? 0 : Math.round(result.repairCost),
-            seismic_retrofit: noWork ? 0 : Math.round(result.retrofitCost),
-            base_isolation: noWork ? 0 : Math.round(result.isolatorCost),
-            energy_dampers: noWork ? 0 : Math.round(result.damperCost),
-            rubble_removal: noWork ? 0 : Math.round(result.rubbleCost),
-            engineering_contingency: noWork ? 0 : Math.round(result.engineeringCost),
-            total_cost: Math.round(rowTotal)
+            repair_retrofit_cost: Math.round(repair.totalCost),
+            demolish_rebuild_cost: Math.round(rebuild.totalCost),
+            rebuild_share_assumed: rebuildShare,
+            expected_cost_if_detected: Math.round(expected)
           });
         });
 
@@ -463,13 +495,12 @@ require([
 
       const link = document.createElement("a");
       link.href = url;
-      link.download = "all_building_cost_estimates.csv";
+      link.download = "building_cost_estimates_confidence_tiers.csv";
       link.click();
 
       URL.revokeObjectURL(url);
 
-      setStatus("Downloaded " + rows.length.toLocaleString() +
-        " buildings. Total estimated cost: " + money(totalCost));
+      setStatus("Downloaded " + rows.length.toLocaleString() + " buildings.");
     } catch (error) {
       console.error(error);
       setStatus("Could not download CSV: " +
@@ -489,12 +520,21 @@ require([
 
     if (!result) return;
 
-    const attributes = result.graphic.attributes || {};
-    selectedLabel = attributes.label || "";
-    selectedDamageProbability = Number(attributes.damage_probability) || 0;
+    const a = result.graphic.attributes || {};
+    selectedTier = a[F_TIER] || "NA";
+    const damaged = Number(a[F_DAMAGE]) === 1;
+    const coverage = Number(a[F_COVERAGE]);
 
-    document.getElementById("workPackage").value =
-      (selectedDamageProbability >= 0.75 || selectedLabel === "likely_damaged") ? "rebuild" : "repair";
+    document.getElementById("clickedDamage").innerHTML =
+      damaged ? "Yes (in binary damage layer)" : "No";
+    document.getElementById("clickedTier").innerHTML = selectedTier;
+    document.getElementById("clickedCoverage").innerHTML =
+      isNaN(coverage) ? "--" : (coverage * 100).toFixed(0) + "%";
+
+    // Tier is detection confidence, not severity, so the work package
+    // defaults to repair for any detected building; the user chooses
+    // rebuild explicitly where local knowledge supports it.
+    document.getElementById("workPackage").value = "repair";
 
     currentArea = Math.abs(geometryEngine.geodesicArea(result.graphic.geometry, "square-meters"));
     updateClickedBuildingPanel();
@@ -502,18 +542,34 @@ require([
 
   document.getElementById("workPackage").addEventListener("change", updateClickedBuildingPanel);
 
-  // Recomputing the summary is now three tiny requests, but still debounce it
-  // so typing "12" doesn't fire queries on every keystroke.
-  const debouncedSummary = debounce(calculateProgramSummary, 400);
+  const debouncedScenarios = debounce(calculateScenarios, 400);
   document.getElementById("manualStories").addEventListener("input", function() {
     updateClickedBuildingPanel();
-    debouncedSummary();
+    debouncedScenarios();
+  });
+  function highlightPreset(value) {
+    document.querySelectorAll(".presetShare").forEach(function(btn) {
+      btn.classList.toggle("active", btn.dataset.value === String(value));
+    });
+  }
+
+  document.querySelectorAll(".presetShare").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      document.getElementById("rebuildShare").value = btn.dataset.value;
+      highlightPreset(btn.dataset.value);
+      calculateScenarios();
+    });
+  });
+
+  document.getElementById("rebuildShare").addEventListener("input", function() {
+    highlightPreset(document.getElementById("rebuildShare").value);
+    debouncedScenarios();
   });
 
   document.getElementById("downloadAllCSV").addEventListener("click", downloadAllBuildingsCSV);
 
   initLayer()
-    .then(calculateProgramSummary)
+    .then(calculateScenarios)
     .catch(function(error) {
       console.error(error);
       setStatus("Could not initialize: " +
@@ -523,10 +579,7 @@ require([
 
 }
 
-// Bootstrap: start immediately if the ArcGIS API is already available,
-// otherwise wait for the page to finish loading and try again. If it is
-// still missing then, say so in the panel instead of throwing
-// "ReferenceError: require is not defined".
+// Bootstrap guard for the ArcGIS API script.
 if (typeof require === "function") {
   startApp();
 } else {
