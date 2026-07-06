@@ -427,7 +427,7 @@ require([
     document.getElementById("cost0").innerHTML = money(cost0);
 
     document.getElementById("grandTotal").innerHTML =
-      money(cost75 + cost64 + cost0);
+      money(cost75 + cost64 + cost0).toLocaleString();
 
     if (rows.length === 0) {
       status.innerHTML = "No building records found.";
