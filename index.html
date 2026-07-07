@@ -1,11 +1,9 @@
-Updated and syntax-verified. Two things to know:
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Damage Cost Estimator</title>
+  <title>Estimador de Costos de Daños</title>
 
   <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css">
   <script src="https://js.arcgis.com/4.30/"></script>
@@ -21,6 +19,9 @@ Updated and syntax-verified. Two things to know:
 
     h2 { margin-top: 0; }
     h3 { margin-bottom: 6px; }
+
+    .panel-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    #langSelect { width: auto; padding: 4px 6px; margin: 0; font-size: 13px; }
 
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
 
@@ -55,86 +56,92 @@ Updated and syntax-verified. Two things to know:
 <div id="viewDiv"></div>
 
 <div id="panel">
-  <h2>Damage Cost Estimator</h2>
-  <p>Click a building to estimate reconstruction cost.</p>
+  <div class="panel-header">
+    <h2 data-i18n="title">Estimador de Costos de Daños</h2>
+    <select id="langSelect" aria-label="Idioma / Language">
+      <option value="es">Español</option>
+      <option value="en">English</option>
+    </select>
+  </div>
+  <p data-i18n="subtitle">Haga clic en un edificio para estimar el costo de reconstrucción.</p>
 
   <div class="summary-box">
-    <b>Program Summary</b><br><br>
+    <b data-i18n="programSummary">Resumen del Programa</b><br><br>
 
     <table>
       <tr>
-        <td><b>Damage Category</b></td>
-        <td><b>Buildings</b></td>
-        <td><b>Estimated Cost</b></td>
+        <td><b data-i18n="colCategory">Categoría de Daño</b></td>
+        <td><b data-i18n="colBuildings">Edificios</b></td>
+        <td><b data-i18n="colCost">Costo Estimado</b></td>
       </tr>
 
       <tr>
-        <td>&ge;75% Damage<br>Demolish &amp; Rebuild</td>
+        <td data-i18n="cat75">Daño &ge;75%<br>Demoler y Reconstruir</td>
         <td id="count75">--</td>
         <td id="cost75">--</td>
       </tr>
 
       <tr>
-        <td>1&ndash;74% Damage (yellow/orange)<br>Repair &amp; Retrofit</td>
+        <td data-i18n="cat164">Daño 1&ndash;74% (amarillo/naranja)<br>Reparar y Reforzar</td>
         <td id="count64">--</td>
         <td id="cost64">--</td>
       </tr>
 
       <tr>
-        <td>&le;1% Damage (white)<br>No Reconstruction</td>
+        <td data-i18n="cat0">Daño &le;1% (blanco)<br>Sin Reconstrucción</td>
         <td id="count0">--</td>
         <td id="cost0">$0</td>
       </tr>
 
       <tr>
-        <td><b>Total</b></td>
+        <td><b data-i18n="total">Total</b></td>
         <td id="totalBuildings">--</td>
         <td id="grandTotal">--</td>
       </tr>
     </table>
   </div>
 
-  <label>Work Package</label>
+  <label data-i18n="workPackageLabel">Paquete de Trabajo</label>
   <select id="workPackage">
-    <option value="rebuild">Demolish &amp; Rebuild &ge;75% Damaged</option>
-    <option value="repair">Repair &amp; Retrofit &lt;75% Damaged</option>
+    <option value="rebuild" data-i18n="optRebuild">Demoler y Reconstruir (daño &ge;75%)</option>
+    <option value="repair" data-i18n="optRepair">Reparar y Reforzar (daño &lt;75%)</option>
   </select>
 
-  <label>Estimated Stories</label>
+  <label data-i18n="storiesLabel">Pisos Estimados</label>
   <input id="manualStories" type="number" min="1" value="2">
 
-  <h3>Building Information</h3>
+  <h3 data-i18n="buildingInfo">Información del Edificio</h3>
   <table>
-    <tr><td>Footprint Area</td><td id="area">--</td></tr>
-    <tr><td>Footprint Area ft&sup2;</td><td id="areaFt">--</td></tr>
-    <tr><td>Stories</td><td id="stories">--</td></tr>
-    <tr><td>Built Area</td><td id="built">--</td></tr>
-    <tr><td>Damage Probability</td><td id="clickedDamage">--</td></tr>
+    <tr><td data-i18n="rowArea">Área de Huella</td><td id="area">--</td></tr>
+    <tr><td data-i18n="rowAreaFt">Área de Huella ft&sup2;</td><td id="areaFt">--</td></tr>
+    <tr><td data-i18n="rowStories">Pisos</td><td id="stories">--</td></tr>
+    <tr><td data-i18n="rowBuilt">Área Construida</td><td id="built">--</td></tr>
+    <tr><td data-i18n="rowDamage">Probabilidad de Daño</td><td id="clickedDamage">--</td></tr>
   </table>
 
-  <h3>Cost Breakdown</h3>
+  <h3 data-i18n="costBreakdown">Desglose de Costos</h3>
   <table>
-    <tr><td>Base Construction</td><td id="baseCost">--</td></tr>
-    <tr><td>Structural Repairs</td><td id="repairCost">--</td></tr>
-    <tr><td>Seismic Retrofit</td><td id="retrofitCost">--</td></tr>
-    <tr><td>Base Isolation</td><td id="isolatorCost">--</td></tr>
-    <tr><td>Energy Dampers</td><td id="damperCost">--</td></tr>
-    <tr><td>Rubble Removal</td><td id="rubbleCost">--</td></tr>
-    <tr><td>Engineering / Permits / Contingency</td><td id="engineeringCost">--</td></tr>
+    <tr><td data-i18n="rowBase">Construcción Base</td><td id="baseCost">--</td></tr>
+    <tr><td data-i18n="rowRepairs">Reparaciones Estructurales</td><td id="repairCost">--</td></tr>
+    <tr><td data-i18n="rowRetrofit">Reforzamiento Sísmico</td><td id="retrofitCost">--</td></tr>
+    <tr><td data-i18n="rowIsolation">Aislamiento Sísmico de Base</td><td id="isolatorCost">--</td></tr>
+    <tr><td data-i18n="rowDampers">Disipadores de Energía</td><td id="damperCost">--</td></tr>
+    <tr><td data-i18n="rowRubble">Remoción de Escombros</td><td id="rubbleCost">--</td></tr>
+    <tr><td data-i18n="rowEngineering">Ingeniería / Permisos / Contingencia</td><td id="engineeringCost">--</td></tr>
   </table>
 
-  <h3>Total Estimate</h3>
+  <h3 data-i18n="totalEstimate">Estimación Total</h3>
   <p class="total" id="totalCost">--</p>
 
-  <button id="downloadAllCSV">Download All Building Cost Table</button>
-  <p id="downloadStatus">Loading program summary...</p>
+  <button id="downloadAllCSV" data-i18n="downloadBtn">Descargar Tabla de Costos de Todos los Edificios</button>
+  <p id="downloadStatus">Cargando resumen del programa...</p>
 </div>
 
 <script>
-// The ArcGIS JS API script tag in <head> (https://js.arcgis.com/4.30/) is what
-// defines the global require() used below. If that tag is missing, moved below
-// this script, or blocked, require is undefined - so the app start is wrapped
-// and guarded at the bottom of this file instead of calling require directly.
+// La API de ArcGIS JS cargada en <head> define el require() global usado
+// abajo; el arranque esta protegido al final del archivo. / The ArcGIS JS
+// API script in <head> defines the global require(); startup is guarded at
+// the bottom of this file.
 function startApp() {
 
 require([
@@ -147,6 +154,154 @@ require([
 
   esriConfig.portalUrl = "https://gis.earthdata.nasa.gov/portal";
 
+  // ======================= TRANSLATIONS / TRADUCCIONES =======================
+  const I18N = {
+    es: {
+      locale: "es-VE",
+      title: "Estimador de Costos de Daños",
+      subtitle: "Haga clic en un edificio para estimar el costo de reconstrucción.",
+      programSummary: "Resumen del Programa",
+      colCategory: "Categoría de Daño",
+      colBuildings: "Edificios",
+      colCost: "Costo Estimado",
+      cat75: "Daño &ge;75%<br>Demoler y Reconstruir",
+      cat164: "Daño 1&ndash;74% (amarillo/naranja)<br>Reparar y Reforzar",
+      cat0: "Daño &le;1% (blanco)<br>Sin Reconstrucción",
+      total: "Total",
+      workPackageLabel: "Paquete de Trabajo",
+      optRebuild: "Demoler y Reconstruir (daño ≥75%)",
+      optRepair: "Reparar y Reforzar (daño <75%)",
+      storiesLabel: "Pisos Estimados",
+      buildingInfo: "Información del Edificio",
+      rowArea: "Área de Huella",
+      rowAreaFt: "Área de Huella ft²",
+      rowStories: "Pisos",
+      rowBuilt: "Área Construida",
+      rowDamage: "Probabilidad de Daño",
+      costBreakdown: "Desglose de Costos",
+      rowBase: "Construcción Base",
+      rowRepairs: "Reparaciones Estructurales",
+      rowRetrofit: "Reforzamiento Sísmico",
+      rowIsolation: "Aislamiento Sísmico de Base",
+      rowDampers: "Disipadores de Energía",
+      rowRubble: "Remoción de Escombros",
+      rowEngineering: "Ingeniería / Permisos / Contingencia",
+      totalEstimate: "Estimación Total",
+      downloadBtn: "Descargar Tabla de Costos de Todos los Edificios",
+      wpRebuild: "Demoler y Reconstruir",
+      wpRepair: "Reparar y Reforzar",
+      wpNone: "Sin Reconstrucción",
+      statusLoading: "Cargando resumen del programa...",
+      statusCalculating: "Calculando el resumen del programa...",
+      statusCalculated: "Resumen del programa calculado. Use el botón para descargar el CSV.",
+      statusErrorSummary: "No se pudo calcular el resumen del programa: ",
+      statusConsole: "vea la consola para más detalles.",
+      statusProcessed: (a, b) => "Procesados " + a + " de " + b + " edificios...",
+      statusNoRecords: "No se encontraron registros de edificios.",
+      statusDownloaded: (n, c) => "Descargados " + n + " edificios. Costo total estimado: " + c,
+      statusErrorCSV: "No se pudo descargar el CSV: ",
+      statusErrorInit: "No se pudo inicializar: ",
+      errNoShapeArea: "La capa no tiene el campo Shape__Area - no se pueden calcular resúmenes rápidos.",
+      errCalibration: "No se pudo calibrar las unidades de área a partir de la muestra.",
+      apiError: "La API de JavaScript de ArcGIS no se cargó. Esta página necesita " +
+        "&lt;script src=&quot;https://js.arcgis.com/4.30/&quot;&gt;&lt;/script&gt; " +
+        "en &lt;head&gt;, ANTES de este script. Revise la pestaña Red (Network) por una solicitud bloqueada.",
+      csvFilename: "costos_todos_los_edificios.csv",
+      csvHeaders: {
+        id: "id_overture", label: "etiqueta", prob: "probabilidad_de_dano",
+        m2: "huella_m2", ft2: "huella_ft2", stories: "pisos_asumidos",
+        built: "area_construida_m2", wp: "paquete_de_trabajo",
+        base: "construccion_base", repairs: "reparaciones_estructurales",
+        retrofit: "reforzamiento_sismico", isolation: "aislamiento_sismico",
+        dampers: "disipadores_energia", rubble: "remocion_escombros",
+        eng: "ingenieria_contingencia", totalCost: "costo_total"
+      }
+    },
+    en: {
+      locale: "en-US",
+      title: "Damage Cost Estimator",
+      subtitle: "Click a building to estimate reconstruction cost.",
+      programSummary: "Program Summary",
+      colCategory: "Damage Category",
+      colBuildings: "Buildings",
+      colCost: "Estimated Cost",
+      cat75: "&ge;75% Damage<br>Demolish &amp; Rebuild",
+      cat164: "1&ndash;74% Damage (yellow/orange)<br>Repair &amp; Retrofit",
+      cat0: "&le;1% Damage (white)<br>No Reconstruction",
+      total: "Total",
+      workPackageLabel: "Work Package",
+      optRebuild: "Demolish & Rebuild (≥75% damaged)",
+      optRepair: "Repair & Retrofit (<75% damaged)",
+      storiesLabel: "Estimated Stories",
+      buildingInfo: "Building Information",
+      rowArea: "Footprint Area",
+      rowAreaFt: "Footprint Area ft²",
+      rowStories: "Stories",
+      rowBuilt: "Built Area",
+      rowDamage: "Damage Probability",
+      costBreakdown: "Cost Breakdown",
+      rowBase: "Base Construction",
+      rowRepairs: "Structural Repairs",
+      rowRetrofit: "Seismic Retrofit",
+      rowIsolation: "Base Isolation",
+      rowDampers: "Energy Dampers",
+      rowRubble: "Rubble Removal",
+      rowEngineering: "Engineering / Permits / Contingency",
+      totalEstimate: "Total Estimate",
+      downloadBtn: "Download All Building Cost Table",
+      wpRebuild: "Demolish & Rebuild",
+      wpRepair: "Repair & Retrofit",
+      wpNone: "No Reconstruction",
+      statusLoading: "Loading program summary...",
+      statusCalculating: "Calculating program summary...",
+      statusCalculated: "Program summary calculated. Use the button to download the CSV.",
+      statusErrorSummary: "Could not calculate program summary: ",
+      statusConsole: "see Console for details.",
+      statusProcessed: (a, b) => "Processed " + a + " of " + b + " buildings...",
+      statusNoRecords: "No building records found.",
+      statusDownloaded: (n, c) => "Downloaded " + n + " buildings. Total estimated cost: " + c,
+      statusErrorCSV: "Could not download CSV: ",
+      statusErrorInit: "Could not initialize: ",
+      errNoShapeArea: "Layer has no Shape__Area field - cannot compute fast summaries.",
+      errCalibration: "Could not calibrate area units from sample features.",
+      apiError: "The ArcGIS JavaScript API did not load. This page needs " +
+        "&lt;script src=&quot;https://js.arcgis.com/4.30/&quot;&gt;&lt;/script&gt; " +
+        "in &lt;head&gt;, BEFORE this script. Check the Network tab for a blocked request.",
+      csvFilename: "all_building_cost_estimates.csv",
+      csvHeaders: {
+        id: "overture_id", label: "label", prob: "damage_probability",
+        m2: "footprint_m2", ft2: "footprint_ft2", stories: "assumed_stories",
+        built: "built_area_m2", wp: "work_package",
+        base: "base_construction", repairs: "structural_repairs",
+        retrofit: "seismic_retrofit", isolation: "base_isolation",
+        dampers: "energy_dampers", rubble: "rubble_removal",
+        eng: "engineering_contingency", totalCost: "total_cost"
+      }
+    }
+  };
+
+  // Language selection: saved choice, else browser language, else Spanish
+  let lang = "es";
+  try {
+    const saved = localStorage.getItem("dce_lang");
+    if (saved && I18N[saved]) lang = saved;
+    else if ((navigator.language || "").toLowerCase().startsWith("en")) lang = "en";
+  } catch (e) { /* storage unavailable: keep default */ }
+
+  const t = key => I18N[lang][key];
+
+  function applyLanguage() {
+    document.documentElement.lang = lang;
+    document.title = t("title");
+    document.querySelectorAll("[data-i18n]").forEach(el => {
+      const value = t(el.getAttribute("data-i18n"));
+      if (value !== undefined) el.innerHTML = value;
+    });
+    document.getElementById("langSelect").value = lang;
+  }
+
+  // ============================ ECONOMIC MODEL ==============================
+
   const COSTS = {
     constructionPerM2: 684,
     structuralRepairPerM2: 80,
@@ -158,10 +313,8 @@ require([
     engineeringRepairRate: 0.10
   };
 
-  // SQL definitions of the three damage categories. These MUST partition the
-  // dataset (every building falls in exactly one) and match computeCost().
-  // Thresholds match the layer's own renderer: <=1% renders white
-  // ("Unlikely damaged"), 1-50% yellow, 50-75% orange, >=75% red.
+  // SQL category definitions. Thresholds match the layer's renderer:
+  // <=1% white ("Unlikely damaged"), 1-50% yellow, 50-75% orange, >=75% red.
   const NO_WORK_MAX = 0.01;
   const WHERE_REBUILD = "(damage_probability >= 0.75 OR label = 'likely_damaged')";
   const WHERE_NONE =
@@ -179,13 +332,10 @@ require([
   let currentArea = 0;
   let selectedLabel = "";
   let selectedDamageProbability = 0;
-
-  // Conversion factor from the service's Shape__Area units to square meters.
-  // Determined empirically at startup (see calibrateAreaFactor), so the app
-  // works whether the layer stores areas in square degrees or square meters.
-  let areaFactor = null;
+  let areaFactor = null;      // Shape__Area units -> m2, calibrated at startup
   let oidField = "OBJECTID";
   let csvRunning = false;
+  let lastSummary = null;     // cached so a language switch re-renders instantly
 
   const webmap = new WebMap({
     portalItem: { id: "0c3d77dd5aae46e4829d9a282477615c" }
@@ -193,8 +343,12 @@ require([
 
   const view = new MapView({ container: "viewDiv", map: webmap });
 
+  function fmt(n) {
+    return Number(n).toLocaleString(t("locale"));
+  }
+
   function money(value) {
-    return "$" + Math.round(value).toLocaleString();
+    return "$" + fmt(Math.round(value));
   }
 
   function pct(value) {
@@ -208,10 +362,10 @@ require([
   }
 
   function debounce(fn, ms) {
-    let t;
+    let timer;
     return function() {
-      clearTimeout(t);
-      t = setTimeout(fn, ms);
+      clearTimeout(timer);
+      timer = setTimeout(fn, ms);
     };
   }
 
@@ -224,10 +378,10 @@ require([
 
     let baseCost = 0, repairCost = 0, retrofitCost = 0, isolatorCost = 0;
     let damperCost = 0, rubbleCost = 0, engineeringCost = 0, totalCost = 0;
-    let workPackage = "";
+    let workPackageKey = "";
 
     if (isRebuild) {
-      workPackage = "Demolish & Rebuild";
+      workPackageKey = "wpRebuild";
       baseCost = builtArea * COSTS.constructionPerM2;
       isolatorCost = COSTS.baseIsolationPerBuilding;
       damperCost = COSTS.dampersPerBuilding;
@@ -236,7 +390,7 @@ require([
       engineeringCost = hardCost * COSTS.engineeringRebuildRate;
       totalCost = hardCost + engineeringCost;
     } else {
-      workPackage = "Repair & Retrofit";
+      workPackageKey = "wpRepair";
       repairCost = builtArea * COSTS.structuralRepairPerM2;
       retrofitCost = builtArea * COSTS.seismicRetrofitPerM2;
       const hardCost = repairCost + retrofitCost;
@@ -244,7 +398,7 @@ require([
       totalCost = hardCost + engineeringCost;
     }
 
-    return { builtArea, workPackage, baseCost, repairCost, retrofitCost, isolatorCost, damperCost, rubbleCost, engineeringCost, totalCost };
+    return { builtArea, workPackageKey, baseCost, repairCost, retrofitCost, isolatorCost, damperCost, rubbleCost, engineeringCost, totalCost };
   }
 
   function updateClickedBuildingPanel() {
@@ -271,11 +425,12 @@ require([
   }
 
   function updateSummaryDisplay(summary) {
-    document.getElementById("count75").innerHTML = summary.count75.toLocaleString();
-    document.getElementById("count64").innerHTML = summary.count64.toLocaleString();
-    document.getElementById("count0").innerHTML = summary.count0.toLocaleString();
+    lastSummary = summary;
+    document.getElementById("count75").innerHTML = fmt(summary.count75);
+    document.getElementById("count64").innerHTML = fmt(summary.count64);
+    document.getElementById("count0").innerHTML = fmt(summary.count0);
     document.getElementById("totalBuildings").innerHTML =
-      (summary.count75 + summary.count64 + summary.count0).toLocaleString();
+      fmt(summary.count75 + summary.count64 + summary.count0);
     document.getElementById("cost75").innerHTML = money(summary.cost75);
     document.getElementById("cost64").innerHTML = money(summary.cost64);
     document.getElementById("cost0").innerHTML = money(summary.cost0);
@@ -283,13 +438,8 @@ require([
       money(summary.cost75 + summary.cost64 + summary.cost0);
   }
 
-  // ---------------------------------------------------------------------
-  // Startup: load the layer once and work out how to convert Shape__Area
-  // (the area the server maintains for every polygon) into square meters.
-  // We sample a handful of features, compute their true geodesic area, and
-  // take the median ratio. This avoids ever downloading the full dataset's
-  // geometry just to measure footprints.
-  // ---------------------------------------------------------------------
+  // Startup: calibrate Shape__Area -> m2 from a ~25-building sample (median
+  // geodesic ratio) so bulk geometry download is never needed.
   async function initLayer() {
     await structuresLayer.load();
     oidField = structuresLayer.objectIdField || "OBJECTID";
@@ -297,7 +447,7 @@ require([
     const hasShapeArea = (structuresLayer.fields || [])
       .some(f => f.name === "Shape__Area");
     if (!hasShapeArea) {
-      throw new Error("Layer has no Shape__Area field - cannot compute fast summaries.");
+      throw new Error(t("errNoShapeArea"));
     }
 
     const q = structuresLayer.createQuery();
@@ -309,20 +459,18 @@ require([
     const fs = await structuresLayer.queryFeatures(q);
     const ratios = fs.features
       .filter(f => f.geometry && f.attributes.Shape__Area > 0)
-      .map(f => {
-        const m2 = Math.abs(geometryEngine.geodesicArea(f.geometry, "square-meters"));
-        return m2 / f.attributes.Shape__Area;
-      })
+      .map(f => Math.abs(geometryEngine.geodesicArea(f.geometry, "square-meters")) /
+                f.attributes.Shape__Area)
       .sort((a, b) => a - b);
 
     if (!ratios.length) {
-      throw new Error("Could not calibrate area units from sample features.");
+      throw new Error(t("errCalibration"));
     }
     areaFactor = ratios[Math.floor(ratios.length / 2)]; // median
   }
 
-  // One small statistics request: count of buildings + total footprint area
-  // for a given WHERE clause. No geometry is transferred.
+  // One statistics request: building count + total footprint area for a
+  // WHERE clause. No geometry is transferred.
   async function statsFor(where) {
     const q = structuresLayer.createQuery();
     q.where = where;
@@ -339,12 +487,11 @@ require([
     };
   }
 
-  // Program summary from three tiny server-side queries. Because every cost
-  // component is either linear in area or a fixed per-building amount, the
-  // aggregate math below produces the same totals as summing computeCost()
-  // over every individual building.
+  // Program summary from three small server-side queries. All cost
+  // components are linear in area or fixed per building, so the aggregate
+  // math equals summing computeCost() over every individual building.
   async function calculateProgramSummary() {
-    setStatus("Calculating program summary...");
+    setStatus(t("statusCalculating"));
     try {
       const stories = Number(document.getElementById("manualStories").value) || 2;
 
@@ -371,18 +518,16 @@ require([
         cost75: cost75, cost64: cost64, cost0: 0
       });
 
-      setStatus("Program summary calculated. Use the button to download the CSV.");
+      setStatus(t("statusCalculated"));
     } catch (error) {
       console.error(error);
-      setStatus("Could not calculate program summary: " +
-        (error && error.message ? error.message : "see Console for details."));
+      setStatus(t("statusErrorSummary") +
+        (error && error.message ? error.message : t("statusConsole")));
     }
   }
 
-  // CSV export: still one row per building, but with returnGeometry = false
-  // and only three attribute fields per feature, so pages are small and fast.
-  // Footprint area comes from Shape__Area * areaFactor instead of client-side
-  // geodesic measurement.
+  // CSV export: one row per building, attributes only (no geometry).
+  // Headers and work-package values follow the active language.
   async function downloadAllBuildingsCSV() {
     if (csvRunning) return;
     csvRunning = true;
@@ -391,6 +536,7 @@ require([
 
     try {
       const stories = Number(document.getElementById("manualStories").value) || 2;
+      const H = t("csvHeaders");
 
       const query = structuresLayer.createQuery();
       query.where = "1=1";
@@ -421,33 +567,32 @@ require([
           const rowTotal = noWork ? 0 : result.totalCost;
           totalCost += rowTotal;
 
-          rows.push({
-            overture_id: attributes.overture_id || "",
-            label: label,
-            damage_probability: damageProbability,
-            footprint_m2: areaM2.toFixed(1),
-            footprint_ft2: (areaM2 * 10.7639).toFixed(1),
-            assumed_stories: stories,
-            built_area_m2: (areaM2 * stories).toFixed(1),
-            work_package: noWork ? "No Reconstruction" : result.workPackage,
-            base_construction: noWork ? 0 : Math.round(result.baseCost),
-            structural_repairs: noWork ? 0 : Math.round(result.repairCost),
-            seismic_retrofit: noWork ? 0 : Math.round(result.retrofitCost),
-            base_isolation: noWork ? 0 : Math.round(result.isolatorCost),
-            energy_dampers: noWork ? 0 : Math.round(result.damperCost),
-            rubble_removal: noWork ? 0 : Math.round(result.rubbleCost),
-            engineering_contingency: noWork ? 0 : Math.round(result.engineeringCost),
-            total_cost: Math.round(rowTotal)
-          });
+          const row = {};
+          row[H.id] = attributes.overture_id || "";
+          row[H.label] = label;
+          row[H.prob] = damageProbability;
+          row[H.m2] = areaM2.toFixed(1);
+          row[H.ft2] = (areaM2 * 10.7639).toFixed(1);
+          row[H.stories] = stories;
+          row[H.built] = (areaM2 * stories).toFixed(1);
+          row[H.wp] = noWork ? t("wpNone") : t(result.workPackageKey);
+          row[H.base] = noWork ? 0 : Math.round(result.baseCost);
+          row[H.repairs] = noWork ? 0 : Math.round(result.repairCost);
+          row[H.retrofit] = noWork ? 0 : Math.round(result.retrofitCost);
+          row[H.isolation] = noWork ? 0 : Math.round(result.isolatorCost);
+          row[H.dampers] = noWork ? 0 : Math.round(result.damperCost);
+          row[H.rubble] = noWork ? 0 : Math.round(result.rubbleCost);
+          row[H.eng] = noWork ? 0 : Math.round(result.engineeringCost);
+          row[H.totalCost] = Math.round(rowTotal);
+          rows.push(row);
         });
 
-        setStatus("Processed " +
-          Math.min(start + pageSize, count).toLocaleString() +
-          " of " + count.toLocaleString() + " buildings...");
+        setStatus(t("statusProcessed")(
+          fmt(Math.min(start + pageSize, count)), fmt(count)));
       }
 
       if (rows.length === 0) {
-        setStatus("No building records found.");
+        setStatus(t("statusNoRecords"));
         return;
       }
 
@@ -459,22 +604,22 @@ require([
         )
       ].join("\n");
 
-      const blob = new Blob([csv], { type: "text/csv" });
+      // UTF-8 BOM so Excel renders accented characters correctly
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
 
       const link = document.createElement("a");
       link.href = url;
-      link.download = "all_building_cost_estimates.csv";
+      link.download = t("csvFilename");
       link.click();
 
       URL.revokeObjectURL(url);
 
-      setStatus("Downloaded " + rows.length.toLocaleString() +
-        " buildings. Total estimated cost: " + money(totalCost));
+      setStatus(t("statusDownloaded")(fmt(rows.length), money(totalCost)));
     } catch (error) {
       console.error(error);
-      setStatus("Could not download CSV: " +
-        (error && error.message ? error.message : "see Console for details."));
+      setStatus(t("statusErrorCSV") +
+        (error && error.message ? error.message : t("statusConsole")));
     } finally {
       csvRunning = false;
       button.disabled = false;
@@ -503,8 +648,6 @@ require([
 
   document.getElementById("workPackage").addEventListener("change", updateClickedBuildingPanel);
 
-  // Recomputing the summary is now three tiny requests, but still debounce it
-  // so typing "12" doesn't fire queries on every keystroke.
   const debouncedSummary = debounce(calculateProgramSummary, 400);
   document.getElementById("manualStories").addEventListener("input", function() {
     updateClickedBuildingPanel();
@@ -513,21 +656,36 @@ require([
 
   document.getElementById("downloadAllCSV").addEventListener("click", downloadAllBuildingsCSV);
 
+  // Language dropdown: re-label the UI and re-render the numbers in place -
+  // no queries are re-run, everything redraws from cached values.
+  document.getElementById("langSelect").addEventListener("change", function() {
+    lang = this.value;
+    try { localStorage.setItem("dce_lang", lang); } catch (e) { /* ignore */ }
+    applyLanguage();
+    if (lastSummary) {
+      updateSummaryDisplay(lastSummary);
+      setStatus(t("statusCalculated"));
+    } else {
+      setStatus(t("statusLoading"));
+    }
+    updateClickedBuildingPanel();
+  });
+
+  applyLanguage();
+  setStatus(t("statusLoading"));
+
   initLayer()
     .then(calculateProgramSummary)
     .catch(function(error) {
       console.error(error);
-      setStatus("Could not initialize: " +
-        (error && error.message ? error.message : "see Console for details."));
+      setStatus(t("statusErrorInit") +
+        (error && error.message ? error.message : t("statusConsole")));
     });
 });
 
 }
 
-// Bootstrap: start immediately if the ArcGIS API is already available,
-// otherwise wait for the page to finish loading and try again. If it is
-// still missing then, say so in the panel instead of throwing
-// "ReferenceError: require is not defined".
+// Bootstrap guard for the ArcGIS API script (bilingual fallback message).
 if (typeof require === "function") {
   startApp();
 } else {
@@ -536,9 +694,9 @@ if (typeof require === "function") {
       startApp();
     } else {
       document.getElementById("downloadStatus").innerHTML =
-        "The ArcGIS JavaScript API did not load. This page needs " +
+        "La API de JavaScript de ArcGIS no se cargó / The ArcGIS JavaScript API did not load. " +
         "&lt;script src=&quot;https://js.arcgis.com/4.30/&quot;&gt;&lt;/script&gt; " +
-        "in &lt;head&gt;, BEFORE this script. Check the Network tab for a blocked request.";
+        "debe estar en &lt;head&gt; ANTES de este script / must be in &lt;head&gt; BEFORE this script.";
     }
   });
 }
