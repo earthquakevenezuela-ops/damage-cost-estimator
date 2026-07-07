@@ -36,6 +36,8 @@
 
     button:disabled { opacity: .5; cursor: not-allowed; }
 
+    #labelModeBtn.active { background: #b91c1c; color: #fff; font-weight: bold; }
+
     .summary-box {
       background:#f3f3f3; padding:10px; margin-bottom:10px; border-radius:6px; font-size: 14px;
     }
@@ -64,6 +66,9 @@
     </select>
   </div>
   <p data-i18n="subtitle">Haga clic en un edificio para estimar el costo de reconstrucción.</p>
+
+  <button id="labelModeBtn" data-i18n="labelModeBtn">➕ Marcar edificio (agregar etiqueta)</button>
+  <button id="exportLabels" data-i18n="exportLabelsBtn">Exportar etiquetas (JSON)</button>
 
   <div class="summary-box">
     <b data-i18n="programSummary">Resumen del Programa</b><br><br>
@@ -149,8 +154,10 @@ require([
   "esri/WebMap",
   "esri/views/MapView",
   "esri/geometry/geometryEngine",
-  "esri/layers/FeatureLayer"
-], function(esriConfig, WebMap, MapView, geometryEngine, FeatureLayer) {
+  "esri/layers/FeatureLayer",
+  "esri/layers/GraphicsLayer",
+  "esri/Graphic"
+], function(esriConfig, WebMap, MapView, geometryEngine, FeatureLayer, GraphicsLayer, Graphic) {
 
   esriConfig.portalUrl = "https://gis.earthdata.nasa.gov/portal";
 
@@ -206,6 +213,13 @@ require([
       apiError: "La API de JavaScript de ArcGIS no se cargó. Esta página necesita " +
         "&lt;script src=&quot;https://js.arcgis.com/4.30/&quot;&gt;&lt;/script&gt; " +
         "en &lt;head&gt;, ANTES de este script. Revise la pestaña Red (Network) por una solicitud bloqueada.",
+      labelModeBtn: "➕ Marcar edificio (agregar etiqueta)",
+      labelModeActive: "Modo de etiquetado ACTIVO — haga clic en un edificio del mapa. Pulse el botón de nuevo para salir.",
+      labelModeOff: "Modo de etiquetado desactivado.",
+      exportLabelsBtn: "Exportar etiquetas (JSON)",
+      labelPrompt: "Texto de la etiqueta para este edificio:",
+      labelSaved: "Etiqueta guardada (visible solo en este navegador). Exporte el JSON y péguelo en ANNOTATIONS en el código para que todos la vean.",
+      labelNone: "No hay etiquetas para exportar.",
       csvFilename: "costos_todos_los_edificios.csv",
       csvHeaders: {
         id: "id_overture", label: "etiqueta", prob: "probabilidad_de_dano",
@@ -267,6 +281,13 @@ require([
       apiError: "The ArcGIS JavaScript API did not load. This page needs " +
         "&lt;script src=&quot;https://js.arcgis.com/4.30/&quot;&gt;&lt;/script&gt; " +
         "in &lt;head&gt;, BEFORE this script. Check the Network tab for a blocked request.",
+      labelModeBtn: "➕ Mark building (add label)",
+      labelModeActive: "Label mode ACTIVE — click a building on the map. Press the button again to exit.",
+      labelModeOff: "Label mode off.",
+      exportLabelsBtn: "Export labels (JSON)",
+      labelPrompt: "Label text for this building:",
+      labelSaved: "Label saved (visible in this browser only). Export the JSON and paste it into ANNOTATIONS in the code so everyone sees it.",
+      labelNone: "No labels to export.",
       csvFilename: "all_building_cost_estimates.csv",
       csvHeaders: {
         id: "overture_id", label: "label", prob: "damage_probability",
@@ -342,6 +363,86 @@ require([
   });
 
   const view = new MapView({ container: "viewDiv", map: webmap });
+
+  // ======================= BUILDING LABELS / ETIQUETAS =======================
+  // Permanent labels shared with every visitor: add entries here (use the
+  // "Export labels (JSON)" button to collect labels created by clicking).
+  const ANNOTATIONS = [
+    {
+      overture_id: "0796751d-a57e-463c-8bae-bdb42cbd211f",
+      text: "People are alive 6/7/26"
+    },
+    {
+      overture_id: "1485d9de-b1dd-4a8a-bced-8dc31dbff54f",
+      text: "People are alive 6/7/26"
+    },
+    {
+      overture_id: "f380dc97-99f7-423c-b301-201964b94b50",
+      text: "People are alive 6/7/26"
+    }
+  ];
+
+  const annotationsLayer = new GraphicsLayer({ title: "Building labels" });
+  webmap.add(annotationsLayer);
+
+  let labelMode = false;
+  let sessionAnnotations = [];   // labels added by clicking, in this browser
+  try {
+    sessionAnnotations = JSON.parse(localStorage.getItem("dce_labels") || "[]");
+  } catch (e) { sessionAnnotations = []; }
+
+  function saveSessionAnnotations() {
+    try { localStorage.setItem("dce_labels", JSON.stringify(sessionAnnotations)); }
+    catch (e) { /* storage unavailable */ }
+  }
+
+  function drawAnnotation(geometry, text) {
+    // Building outline so the labeled footprint stands out
+    annotationsLayer.add(new Graphic({
+      geometry: geometry,
+      symbol: {
+        type: "simple-fill",
+        color: [0, 0, 0, 0],
+        outline: { color: [0, 255, 255, 1], width: 2.5 }
+      }
+    }));
+    // Text with a strong halo so it reads over any basemap
+    annotationsLayer.add(new Graphic({
+      geometry: geometry.centroid || geometry,
+      symbol: {
+        type: "text",
+        text: text,
+        color: "white",
+        haloColor: [185, 28, 28, 1],
+        haloSize: 2,
+        yoffset: 12,
+        font: { size: 12, weight: "bold", family: "Arial" }
+      }
+    }));
+  }
+
+  // Fetch geometries for the hardcoded + saved annotations and draw them
+  async function loadAnnotations() {
+    const all = ANNOTATIONS.concat(sessionAnnotations);
+    if (!all.length) return;
+
+    const ids = [...new Set(all.map(a => a.overture_id))]
+      .map(id => "'" + String(id).replaceAll("'", "''") + "'");
+
+    const q = structuresLayer.createQuery();
+    q.where = "overture_id IN (" + ids.join(",") + ")";
+    q.outFields = ["overture_id"];
+    q.returnGeometry = true;
+
+    const fs = await structuresLayer.queryFeatures(q);
+    fs.features.forEach(f => {
+      all
+        .filter(a => a.overture_id === f.attributes.overture_id)
+        .forEach(a => drawAnnotation(f.geometry, a.text));
+    });
+  }
+  // ===========================================================================
+
 
   function fmt(n) {
     return Number(n).toLocaleString(t("locale"));
@@ -636,6 +737,22 @@ require([
     if (!result) return;
 
     const attributes = result.graphic.attributes || {};
+
+    // Label mode: clicking a building adds a text label instead of pricing it
+    if (labelMode) {
+      const text = window.prompt(t("labelPrompt"), "");
+      if (text && text.trim()) {
+        drawAnnotation(result.graphic.geometry, text.trim());
+        sessionAnnotations.push({
+          overture_id: attributes.overture_id || "",
+          text: text.trim()
+        });
+        saveSessionAnnotations();
+        setStatus(t("labelSaved"));
+      }
+      return;
+    }
+
     selectedLabel = attributes.label || "";
     selectedDamageProbability = Number(attributes.damage_probability) || 0;
 
@@ -671,11 +788,33 @@ require([
     updateClickedBuildingPanel();
   });
 
+  document.getElementById("labelModeBtn").addEventListener("click", function() {
+    labelMode = !labelMode;
+    this.classList.toggle("active", labelMode);
+    setStatus(labelMode ? t("labelModeActive") : t("labelModeOff"));
+  });
+
+  document.getElementById("exportLabels").addEventListener("click", function() {
+    const all = ANNOTATIONS.concat(sessionAnnotations);
+    if (!all.length) { setStatus(t("labelNone")); return; }
+    const blob = new Blob([JSON.stringify(all, null, 2)],
+      { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "building_labels.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+
   applyLanguage();
   setStatus(t("statusLoading"));
 
   initLayer()
-    .then(calculateProgramSummary)
+    .then(function() {
+      loadAnnotations().catch(function(e) { console.error("Labels:", e); });
+      return calculateProgramSummary();
+    })
     .catch(function(error) {
       console.error(error);
       setStatus(t("statusErrorInit") +
