@@ -489,6 +489,9 @@ require([
     portalItem: { id: "0c3d77dd5aae46e4829d9a282477615c" }
   });
   const view = new MapView({ container: "viewDiv", map: webmap });
+  // The custom panel (below) handles all click info; suppress Esri's default
+  // auto-popup so clicking a building doesn't also open a redundant field-list box.
+  view.when(function() { view.popup.autoOpenEnabled = false; });
 
   // ======================= BUILDING LABELS / ETIQUETAS =======================
   const ANNOTATIONS = [
@@ -828,7 +831,11 @@ require([
     if (mode === "tier") {
       const tier = a.damage_confidence || "";
       $("clickedDamage").innerHTML = TIER_I18N_KEY[TIER_CODE[tier]] ? t(TIER_I18N_KEY[TIER_CODE[tier]]) : tier;
-      currentClickedIsRebuildDefault = false; // tier != severity: default to repair
+      // Default work package follows the same red/orange/yellow severity
+      // display already shown on the map: red (high_confidence) -> rebuild;
+      // orange (probable) / yellow (possible) -> repair. Still user-overridable
+      // via the dropdown for any individual building.
+      currentClickedIsRebuildDefault = (tier === "high_confidence");
     } else {
       const dp = Number(a.damage_probability);
       $("clickedDamage").innerHTML = isNaN(dp) ? "--" : (dp * 100).toFixed(0) + "%";
