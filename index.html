@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Damage Cost Estimator</title>
+  <title>Estimador de Costos de Daños</title>
 
   <link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css">
   <script src="https://js.arcgis.com/4.30/"></script>
@@ -20,6 +20,9 @@
     h2 { margin-top: 0; }
     h3 { margin-bottom: 6px; }
 
+    .panel-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    #langSelect { width: auto; padding: 4px 6px; margin: 0; font-size: 13px; }
+
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
 
     td { padding: 6px 0; border-bottom: 1px solid #ddd; vertical-align: top; }
@@ -29,15 +32,18 @@
     .note  { font-size: 11px; color: #666; margin: 6px 0 0 0; }
 
     #modeBanner {
-      font-size: 12px; background: #fff7e0; border: 1px solid #e0c060;
-      border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; display: none;
+      font-size: 12px; background: #eaf4ea; border: 1px solid #7bb87b;
+      border-radius: 4px; padding: 6px 8px; margin-bottom: 8px;
     }
+    #modeBanner.fallback { background: #fff7e0; border-color: #e0c060; }
 
     select, input, button {
       width: 100%; padding: 6px; margin-top: 4px; margin-bottom: 8px; box-sizing: border-box;
     }
 
     button:disabled, input:disabled { opacity: .5; cursor: not-allowed; }
+
+    #labelModeBtn.active { background: #b91c1c; color: #fff; font-weight: bold; }
 
     .preset-row { display: flex; gap: 6px; margin-bottom: 4px; }
     .preset-row button { flex: 1; margin: 0; cursor: pointer; background: #f3f3f3; border: 1px solid #bbb; border-radius: 4px; }
@@ -63,90 +69,96 @@
 <div id="viewDiv"></div>
 
 <div id="panel">
-  <h2>Damage Cost Estimator</h2>
-  <p>Click a building to estimate reconstruction cost.</p>
+  <div class="panel-header">
+    <h2 data-i18n="title">Estimador de Costos de Daños</h2>
+    <select id="langSelect" aria-label="Idioma / Language">
+      <option value="es">Español</option>
+      <option value="en">English</option>
+    </select>
+  </div>
+  <p data-i18n="subtitle">Haga clic en un edificio para estimar el costo de reconstrucción.</p>
 
   <div id="modeBanner"></div>
 
+  <button id="labelModeBtn" data-i18n="labelModeBtn">➕ Marcar edificio (agregar etiqueta)</button>
+  <button id="exportLabels" data-i18n="exportLabelsBtn">Exportar etiquetas (JSON)</button>
+
+  <label id="pinsToggleRow" style="display:none; font-size:13px; cursor:pointer;">
+    <input type="checkbox" id="pinsToggle" checked style="width:auto; margin-right:6px; vertical-align:middle;">
+    <span data-i18n="pinsToggle">Mostrar reportes SismoAyuda VE</span>
+  </label>
+
   <div class="summary-box">
-    <b id="summaryTitle">Program Summary</b><br><br>
+    <b id="summaryTitle" data-i18n="programSummary">Resumen del Programa</b><br><br>
 
     <table>
       <tr>
-        <td><b id="colLabel">Category</b></td>
-        <td><b>Buildings</b></td>
-        <td><b>Estimated Cost</b></td>
+        <td><b id="colLabel" data-i18n="colCategory">Categoría</b></td>
+        <td><b data-i18n="colBuildings">Edificios</b></td>
+        <td><b data-i18n="colCost">Costo Estimado</b></td>
       </tr>
-
       <tr id="row1"><td id="lbl1">--</td><td id="count1">--</td><td id="cost1">--</td></tr>
       <tr id="row2"><td id="lbl2">--</td><td id="count2">--</td><td id="cost2">--</td></tr>
       <tr id="row3"><td id="lbl3">--</td><td id="count3">--</td><td id="cost3">--</td></tr>
       <tr id="row4"><td id="lbl4">--</td><td id="count4">--</td><td id="cost4">$0</td></tr>
       <tr id="row5"><td id="lbl5">--</td><td id="count5">--</td><td id="cost5">&mdash;</td></tr>
-      <tr id="rowTotal"><td><b>Total</b></td><td id="countTotal">--</td><td id="costTotal">--</td></tr>
+      <tr id="rowTotal"><td><b data-i18n="total">Total</b></td><td id="countTotal">--</td><td id="costTotal">--</td></tr>
     </table>
-
     <p class="note" id="summaryNote"></p>
   </div>
 
   <div id="shareBlock">
-    <label>Fraction of total losses needing demolition (%)</label>
+    <label data-i18n="shareLabel">Fracción de pérdida total que requiere demolición (%)</label>
     <div class="preset-row">
       <button type="button" class="presetShare" data-value="20">20%</button>
       <button type="button" class="presetShare active" data-value="25">25%</button>
       <button type="button" class="presetShare" data-value="30">30%</button>
     </div>
     <input id="rebuildShare" type="number" min="0" max="100" value="25">
-    <p class="note" id="shareNote">
-      Share of detected buildings priced as total losses (demolish &amp;
-      rebuild); the remainder are priced for repair &amp; retrofit. Default 25%
-      from the Copernicus EMS crosswalk (695 destroyed of 3,072 graded
-      detections). Use the presets or type any value.
-    </p>
+    <p class="note" id="shareNote"></p>
   </div>
 
-  <label>Estimated Stories</label>
+  <label data-i18n="storiesLabel">Pisos Estimados</label>
   <input id="manualStories" type="number" min="1" value="2">
 
-  <label>Work Package (clicked building)</label>
+  <label data-i18n="workPackageLabel">Paquete de Trabajo (edificio seleccionado)</label>
   <select id="workPackage">
-    <option value="repair">Repair &amp; Retrofit</option>
-    <option value="rebuild">Demolish &amp; Rebuild</option>
+    <option value="repair" data-i18n="optRepair">Reparar y Reforzar</option>
+    <option value="rebuild" data-i18n="optRebuild">Demoler y Reconstruir</option>
   </select>
 
-  <h3>Building Information</h3>
+  <h3 data-i18n="buildingInfo">Información del Edificio</h3>
   <table>
-    <tr><td>Footprint Area</td><td id="area">--</td></tr>
-    <tr><td>Footprint Area ft&sup2;</td><td id="areaFt">--</td></tr>
-    <tr><td>Stories</td><td id="stories">--</td></tr>
-    <tr><td>Built Area</td><td id="built">--</td></tr>
-    <tr><td id="damageRowLabel">Damage Signal</td><td id="clickedDamage">--</td></tr>
-    <tr><td>Radar Coverage</td><td id="clickedCoverage">--</td></tr>
+    <tr><td data-i18n="rowArea">Área de Huella</td><td id="area">--</td></tr>
+    <tr><td data-i18n="rowAreaFt">Área de Huella ft&sup2;</td><td id="areaFt">--</td></tr>
+    <tr><td data-i18n="rowStories">Pisos</td><td id="stories">--</td></tr>
+    <tr><td data-i18n="rowBuilt">Área Construida</td><td id="built">--</td></tr>
+    <tr><td id="damageRowLabel">Nivel de Confianza</td><td id="clickedDamage">--</td></tr>
   </table>
 
-  <h3>Cost Breakdown</h3>
+  <h3 data-i18n="costBreakdown">Desglose de Costos</h3>
   <table>
-    <tr><td>Base Construction</td><td id="baseCost">--</td></tr>
-    <tr><td>Structural Repairs</td><td id="repairCost">--</td></tr>
-    <tr><td>Seismic Retrofit</td><td id="retrofitCost">--</td></tr>
-    <tr><td>Base Isolation</td><td id="isolatorCost">--</td></tr>
-    <tr><td>Energy Dampers</td><td id="damperCost">--</td></tr>
-    <tr><td>Rubble Removal</td><td id="rubbleCost">--</td></tr>
-    <tr><td>Engineering / Permits / Contingency</td><td id="engineeringCost">--</td></tr>
+    <tr><td data-i18n="rowBase">Construcción Base</td><td id="baseCost">--</td></tr>
+    <tr><td data-i18n="rowRepairs">Reparaciones Estructurales</td><td id="repairCost">--</td></tr>
+    <tr><td data-i18n="rowRetrofit">Reforzamiento Sísmico</td><td id="retrofitCost">--</td></tr>
+    <tr><td data-i18n="rowIsolation">Aislamiento Sísmico de Base</td><td id="isolatorCost">--</td></tr>
+    <tr><td data-i18n="rowDampers">Disipadores de Energía</td><td id="damperCost">--</td></tr>
+    <tr><td data-i18n="rowRubble">Remoción de Escombros</td><td id="rubbleCost">--</td></tr>
+    <tr><td data-i18n="rowEngineering">Ingeniería / Permisos / Contingencia</td><td id="engineeringCost">--</td></tr>
   </table>
 
-  <h3>Total Estimate (clicked building)</h3>
+  <h3 data-i18n="totalEstimate">Estimación Total</h3>
   <p class="total" id="totalCost">--</p>
 
-  <button id="downloadAllCSV">Download All Building Cost Table</button>
-  <p id="downloadStatus">Loading data...</p>
+  <button id="downloadAllCSV" data-i18n="downloadBtn">Descargar Tabla de Costos de Todos los Edificios</button>
+  <p id="downloadStatus">Cargando datos...</p>
 </div>
 
 <script>
-// The ArcGIS JS API script tag in <head> (https://js.arcgis.com/4.30/)
-// defines the global require(). The app start is wrapped and guarded at the
-// bottom of this file so a missing/blocked API script produces a readable
-// message instead of "ReferenceError: require is not defined".
+// La API de ArcGIS JS cargada en <head> define el require() global usado
+// abajo; el arranque esta protegido al final del archivo. / The ArcGIS JS
+// API script in <head> defines the global require(); startup is guarded at
+// the bottom of this file.
 function startApp() {
 
 require([
@@ -154,30 +166,228 @@ require([
   "esri/WebMap",
   "esri/views/MapView",
   "esri/geometry/geometryEngine",
-  "esri/layers/FeatureLayer"
-], function(esriConfig, WebMap, MapView, geometryEngine, FeatureLayer) {
+  "esri/layers/FeatureLayer",
+  "esri/layers/GraphicsLayer",
+  "esri/layers/GeoJSONLayer",
+  "esri/Graphic"
+], function(esriConfig, WebMap, MapView, geometryEngine, FeatureLayer, GraphicsLayer, GeoJSONLayer, Graphic) {
 
   esriConfig.portalUrl = "https://gis.earthdata.nasa.gov/portal";
 
-  // -------------------------------------------------------------------
-  // DATA CONFIGURATION
-  // The app inspects the layer's fields at startup and picks a mode:
-  //   TIER mode        - v1 delivery: has a 'damage_confidence' field
-  //                      (possible/probable/high_confidence/below_floor/NA)
-  //   PROBABILITY mode - v0 delivery: has 'damage_probability' (0..1)
-  // When the v1 data is published (here or at a new URL), update LAYER_URL
-  // if needed - the tier scenarios activate automatically.
-  // -------------------------------------------------------------------
-  const LAYER_URL =
-    "https://services7.arcgis.com/WSiUmUhlFx4CtMBB/ArcGIS/rest/services/202610_s1_likelydmgareas/FeatureServer/0";
+  // ======================= TRANSLATIONS / TRADUCCIONES =======================
+  const I18N = {
+    es: {
+      locale: "es-VE",
+      title: "Estimador de Costos de Daños",
+      subtitle: "Haga clic en un edificio para estimar el costo de reconstrucción.",
+      programSummary: "Resumen del Programa",
+      programScenarios: "Escenarios de Costo del Programa",
+      colCategory: "Categoría de Daño",
+      colScenario: "Escenario (confianza de detección)",
+      colBuildings: "Edificios",
+      colCost: "Costo Estimado",
+      total: "Total",
+      workPackageLabel: "Paquete de Trabajo (edificio seleccionado)",
+      optRebuild: "Demoler y Reconstruir",
+      optRepair: "Reparar y Reforzar",
+      storiesLabel: "Pisos Estimados",
+      buildingInfo: "Información del Edificio",
+      rowArea: "Área de Huella",
+      rowAreaFt: "Área de Huella ft²",
+      rowStories: "Pisos",
+      rowBuilt: "Área Construida",
+      rowDamageTier: "Nivel de Confianza",
+      rowDamageProb: "Probabilidad de Daño",
+      costBreakdown: "Desglose de Costos",
+      rowBase: "Construcción Base",
+      rowRepairs: "Reparaciones Estructurales",
+      rowRetrofit: "Reforzamiento Sísmico",
+      rowIsolation: "Aislamiento Sísmico de Base",
+      rowDampers: "Disipadores de Energía",
+      rowRubble: "Remoción de Escombros",
+      rowEngineering: "Ingeniería / Permisos / Contingencia",
+      totalEstimate: "Estimación Total",
+      downloadBtn: "Descargar Tabla de Costos de Todos los Edificios",
+      wpRebuild: "Demoler y Reconstruir",
+      wpRepair: "Reparar y Reforzar",
+      wpNone: "Sin Reconstrucción",
+      statusLoading: "Cargando datos...",
+      statusCalculating: "Calculando...",
+      statusCalculatedTier: "Escenarios calculados a partir de datos reales por edificio (v1, 1 de julio de 2026).",
+      statusCalculatedProb: "Resumen del programa calculado. Use el botón para descargar el CSV.",
+      statusErrorSummary: "No se pudo calcular el resumen: ",
+      statusConsole: "vea la consola para más detalles.",
+      statusProcessed: (a, b) => "Procesados " + a + " de " + b + " edificios...",
+      statusNoRecords: "No se encontraron registros de edificios.",
+      statusDownloaded: (n, c) => "Descargados " + n + " edificios. Costo total estimado: " + c,
+      statusErrorCSV: "No se pudo descargar el CSV: ",
+      statusErrorInit: "No se pudo inicializar: ",
+      errNoShapeArea: "La capa no tiene el campo Shape__Area - no se pueden calcular resúmenes rápidos.",
+      errCalibration: "No se pudo calibrar las unidades de área a partir de la muestra.",
+      apiError: "La API de JavaScript de ArcGIS no se cargó. Esta página necesita " +
+        "&lt;script src=&quot;https://js.arcgis.com/4.30/&quot;&gt;&lt;/script&gt; " +
+        "en &lt;head&gt;, ANTES de este script. Revise la pestaña Red (Network) por una solicitud bloqueada.",
+      labelModeBtn: "➕ Marcar edificio (agregar etiqueta)",
+      labelModeActive: "Modo de etiquetado ACTIVO — haga clic en un edificio del mapa. Pulse el botón de nuevo para salir.",
+      labelModeOff: "Modo de etiquetado desactivado.",
+      exportLabelsBtn: "Exportar etiquetas (JSON)",
+      labelPrompt: "Texto de la etiqueta para este edificio:",
+      labelSaved: "Etiqueta guardada (visible solo en este navegador). Exporte el JSON y péguelo en ANNOTATIONS en el código para que todos la vean.",
+      labelNone: "No hay etiquetas para exportar.",
+      pinsToggle: "Mostrar reportes SismoAyuda VE",
+      shareLabel: "Fracción de pérdida total que requiere demolición (%)",
+      shareNoteTier: "Porción de edificios detectados que se calcula como pérdida total (demoler y reconstruir); el resto se calcula como reparación y refuerzo. 25% por defecto según el cruce con Copernicus EMS (695 de 3,072 detecciones destruidas). Use los botones o escriba cualquier valor.",
+      shareNoteProb: "Aplica solo al modo de niveles de confianza (v1). Desactivado mientras el servicio conectado use el modo de probabilidad (v0).",
+      modeBannerTier: "Datos reales por edificio (v1, niveles de confianza) cargados desde el archivo local. 69,431 edificios en el escenario Central coincide exactamente con la cifra oficial del informe.",
+      modeBannerProb: "Modo provisional: no se encontró el archivo de datos v1 local; usando el servicio anterior basado en probabilidad (v0). Los tres escenarios de confianza se activarán automáticamente cuando el archivo v1 esté disponible.",
+      tierConservative: "Conservador<br>solo high_confidence (z&ge;3)",
+      tierCentral: "<b>Central</b><br>+ probable (z&ge;2, capa oficial de daño)",
+      tierUpper: "Límite superior<br>+ possible (z&ge;1.5)",
+      tierNotIncluded: "No incluido en este extracto<br>(sin señal / no evaluado)",
+      cat75: "&ge;75% Daño / probablemente dañado<br>Demoler y Reconstruir",
+      cat164: "1&ndash;74% Daño (amarillo/naranja)<br>Reparar y Reforzar",
+      cat0: "&le;1% Daño (blanco)<br>Sin Reconstrucción",
+      catNA: "No evaluado<br>Fuera de cobertura de radar",
+      summaryNoteTier: "Los escenarios son acumulativos (cada fila incluye las anteriores). Los niveles de confianza miden certeza de detección, no severidad; la severidad se fija con la fracción de demolición abajo. Los edificios sin señal o no evaluados no están incluidos en este extracto de datos.",
+      summaryNoteProb: "Las categorías siguen los umbrales de la leyenda de la capa. Cada categoría se calcula con su propio paquete de trabajo (sin mezcla de fracción de demolición en este modo).",
+      tierHC: "Alta confianza",
+      tierProbable: "Probable",
+      tierPossible: "Posible",
+      csvFilename: "costos_todos_los_edificios.csv",
+      csvHeadersTier: {
+        id: "id_overture", tier: "nivel_confianza", damage: "en_capa_dano_oficial",
+        m2: "huella_m2", stories: "pisos_asumidos", built: "area_construida_m2",
+        repairCost: "costo_reparacion", rebuildCost: "costo_reconstruccion",
+        assignedPkg: "paquete_asignado", assignedCost: "costo_asignado"
+      },
+      csvHeadersProb: {
+        id: "id_overture", label: "etiqueta", prob: "probabilidad_de_dano",
+        m2: "huella_m2", ft2: "huella_ft2", stories: "pisos_asumidos",
+        built: "area_construida_m2", wp: "paquete_de_trabajo",
+        base: "construccion_base", repairs: "reparaciones_estructurales",
+        retrofit: "reforzamiento_sismico", isolation: "aislamiento_sismico",
+        dampers: "disipadores_energia", rubble: "remocion_escombros",
+        eng: "ingenieria_contingencia", totalCost: "costo_total"
+      }
+    },
+    en: {
+      locale: "en-US",
+      title: "Damage Cost Estimator",
+      subtitle: "Click a building to estimate reconstruction cost.",
+      programSummary: "Program Summary",
+      programScenarios: "Program Cost Scenarios",
+      colCategory: "Damage Category",
+      colScenario: "Scenario (detection confidence)",
+      colBuildings: "Buildings",
+      colCost: "Estimated Cost",
+      total: "Total",
+      workPackageLabel: "Work Package (selected building)",
+      optRebuild: "Demolish & Rebuild",
+      optRepair: "Repair & Retrofit",
+      storiesLabel: "Estimated Stories",
+      buildingInfo: "Building Information",
+      rowArea: "Footprint Area",
+      rowAreaFt: "Footprint Area ft²",
+      rowStories: "Stories",
+      rowBuilt: "Built Area",
+      rowDamageTier: "Confidence Tier",
+      rowDamageProb: "Damage Probability",
+      costBreakdown: "Cost Breakdown",
+      rowBase: "Base Construction",
+      rowRepairs: "Structural Repairs",
+      rowRetrofit: "Seismic Retrofit",
+      rowIsolation: "Base Isolation",
+      rowDampers: "Energy Dampers",
+      rowRubble: "Rubble Removal",
+      rowEngineering: "Engineering / Permits / Contingency",
+      totalEstimate: "Total Estimate",
+      downloadBtn: "Download All Building Cost Table",
+      wpRebuild: "Demolish & Rebuild",
+      wpRepair: "Repair & Retrofit",
+      wpNone: "No Reconstruction",
+      statusLoading: "Loading data...",
+      statusCalculating: "Calculating...",
+      statusCalculatedTier: "Scenarios calculated from real per-building data (v1, July 1, 2026).",
+      statusCalculatedProb: "Program summary calculated. Use the button to download the CSV.",
+      statusErrorSummary: "Could not calculate summary: ",
+      statusConsole: "see Console for details.",
+      statusProcessed: (a, b) => "Processed " + a + " of " + b + " buildings...",
+      statusNoRecords: "No building records found.",
+      statusDownloaded: (n, c) => "Downloaded " + n + " buildings. Total estimated cost: " + c,
+      statusErrorCSV: "Could not download CSV: ",
+      statusErrorInit: "Could not initialize: ",
+      errNoShapeArea: "Layer has no Shape__Area field - cannot compute fast summaries.",
+      errCalibration: "Could not calibrate area units from sample features.",
+      apiError: "The ArcGIS JavaScript API did not load. This page needs " +
+        "&lt;script src=&quot;https://js.arcgis.com/4.30/&quot;&gt;&lt;/script&gt; " +
+        "in &lt;head&gt;, BEFORE this script. Check the Network tab for a blocked request.",
+      labelModeBtn: "➕ Mark building (add label)",
+      labelModeActive: "Label mode ACTIVE — click a building on the map. Press the button again to exit.",
+      labelModeOff: "Label mode off.",
+      exportLabelsBtn: "Export labels (JSON)",
+      labelPrompt: "Label text for this building:",
+      labelSaved: "Label saved (visible in this browser only). Export the JSON and paste it into ANNOTATIONS in the code so everyone sees it.",
+      labelNone: "No labels to export.",
+      pinsToggle: "Show SismoAyuda VE reports",
+      shareLabel: "Fraction of total losses needing demolition (%)",
+      shareNoteTier: "Share of detected buildings priced as total losses (demolish & rebuild); the remainder are priced for repair & retrofit. Default 25% from the Copernicus EMS crosswalk (695 of 3,072 graded detections were destroyed). Use the presets or type any value.",
+      shareNoteProb: "Applies to the confidence-tier (v1) mode only. Disabled while the connected service is running the probability-based (v0) fallback.",
+      modeBannerTier: "Real per-building data (v1, confidence tiers) loaded from local file. The Central scenario's 69,431 buildings matches the official report figure exactly.",
+      modeBannerProb: "Interim mode: the local v1 data file was not found; using the previous probability-based service (v0). The three confidence-tier scenarios will activate automatically once the v1 file is available.",
+      tierConservative: "Conservative<br>high_confidence only (z&ge;3)",
+      tierCentral: "<b>Central</b><br>+ probable (z&ge;2, official damage layer)",
+      tierUpper: "Upper bound<br>+ possible (z&ge;1.5)",
+      tierNotIncluded: "Not included in this extract<br>(no signal / not assessed)",
+      cat75: "&ge;75% Damage / likely damaged<br>Demolish &amp; Rebuild",
+      cat164: "1&ndash;74% Damage (yellow/orange)<br>Repair &amp; Retrofit",
+      cat0: "&le;1% Damage (white)<br>No Reconstruction",
+      catNA: "Not assessed<br>Outside radar coverage",
+      summaryNoteTier: "Scenarios are cumulative (each row includes the rows above it). Confidence tiers measure detection certainty, not severity; severity is set by the demolition-share fraction below. Buildings with no signal or not assessed are not included in this data extract.",
+      summaryNoteProb: "Categories follow the layer's legend thresholds. Each category is priced with its own work package (no demolition-share blending in this mode).",
+      tierHC: "High confidence",
+      tierProbable: "Probable",
+      tierPossible: "Possible",
+      csvFilename: "all_building_cost_estimates.csv",
+      csvHeadersTier: {
+        id: "overture_id", tier: "confidence_tier", damage: "in_official_damage_layer",
+        m2: "footprint_m2", stories: "assumed_stories", built: "built_area_m2",
+        repairCost: "repair_cost", rebuildCost: "rebuild_cost",
+        assignedPkg: "assigned_package", assignedCost: "assigned_cost"
+      },
+      csvHeadersProb: {
+        id: "overture_id", label: "label", prob: "damage_probability",
+        m2: "footprint_m2", ft2: "footprint_ft2", stories: "assumed_stories",
+        built: "built_area_m2", wp: "work_package",
+        base: "base_construction", repairs: "structural_repairs",
+        retrofit: "seismic_retrofit", isolation: "base_isolation",
+        dampers: "energy_dampers", rubble: "rubble_removal",
+        eng: "engineering_contingency", totalCost: "total_cost"
+      }
+    }
+  };
 
-  const F_TIER = "damage_confidence";
-  const F_PROB = "damage_probability";
-  const F_DAMAGE = "damage";
-  const F_LABEL = "label";
-  const F_COVERAGE = "coverage_fraction";
-  const F_WITHIN = "within_coverage";
-  const NO_WORK_MAX = 0.01; // white "Unlikely damaged" floor of the v0 renderer
+  // Language selection: saved choice, else browser language, else Spanish
+  let lang = "es";
+  try {
+    const saved = localStorage.getItem("dce_lang");
+    if (saved && I18N[saved]) lang = saved;
+    else if ((navigator.language || "").toLowerCase().startsWith("en")) lang = "en";
+  } catch (e) { /* storage unavailable */ }
+
+  const t = key => I18N[lang][key];
+  const $ = id => document.getElementById(id);
+
+  function applyLanguage() {
+    document.documentElement.lang = lang;
+    document.title = t("title");
+    document.querySelectorAll("[data-i18n]").forEach(el => {
+      const value = t(el.getAttribute("data-i18n"));
+      if (value !== undefined) el.innerHTML = value;
+    });
+    $("langSelect").value = lang;
+  }
+
+  // ============================ ECONOMIC MODEL ==============================
 
   const COSTS = {
     constructionPerM2: 684,
@@ -190,44 +400,24 @@ require([
     engineeringRepairRate: 0.10
   };
 
-  const structuresLayer = new FeatureLayer({ url: LAYER_URL, outFields: ["*"] });
-
-  let mode = null;          // "tier" | "probability"
-  let fieldNames = [];
-  let idField = "overture_id";
-  let oidField = "fid";
-  let areaFactor = null;    // Shape__Area units -> m2, calibrated at startup
-  let currentArea = 0;
-  let selectedIsRebuildDefault = false;
-  let csvRunning = false;
-
-  const webmap = new WebMap({
-    portalItem: { id: "0c3d77dd5aae46e4829d9a282477615c" }
-  });
-
-  const view = new MapView({ container: "viewDiv", map: webmap });
-
-  const $ = id => document.getElementById(id);
-  const money = v => "$" + Math.round(v).toLocaleString();
-  const setStatus = t => { $("downloadStatus").innerHTML = t; };
+  const money = v => "$" + Number(Math.round(v)).toLocaleString(t("locale"));
+  const fmt = v => Number(v).toLocaleString(t("locale"));
+  const setStatus = txt => { $("downloadStatus").innerHTML = txt; };
 
   function debounce(fn, ms) {
-    let t;
-    return function() { clearTimeout(t); t = setTimeout(fn, ms); };
+    let timer;
+    return function() { clearTimeout(timer); timer = setTimeout(fn, ms); };
   }
 
+  function getStories() { return Number($("manualStories").value) || 2; }
   function getRebuildShare() {
     let pct = Number($("rebuildShare").value);
     if (isNaN(pct)) pct = 25;
     return Math.min(100, Math.max(0, pct)) / 100;
   }
 
-  function getStories() {
-    return Number($("manualStories").value) || 2;
-  }
-
-  // Per-building cost for one explicit work package
-  function computeCost(areaM2, stories, isRebuild) {
+  // Cost for ONE building under an explicit, known work package.
+  function computeCostForPackage(areaM2, stories, isRebuild) {
     const builtArea = areaM2 * stories;
     let baseCost = 0, repairCost = 0, retrofitCost = 0, isolatorCost = 0;
     let damperCost = 0, rubbleCost = 0, engineeringCost = 0, totalCost = 0;
@@ -247,36 +437,323 @@ require([
       engineeringCost = hardCost * COSTS.engineeringRepairRate;
       totalCost = hardCost + engineeringCost;
     }
-
     return { builtArea, baseCost, repairCost, retrofitCost, isolatorCost, damperCost, rubbleCost, engineeringCost, totalCost };
   }
 
-  // Aggregate rebuild-package cost for n buildings with total area areaM2
+  // Aggregate cost for a POPULATION of n buildings (used for the summary table).
   function rebuildAggregate(n, areaM2, stories) {
     const hard = areaM2 * stories * COSTS.constructionPerM2 +
       n * (COSTS.baseIsolationPerBuilding + COSTS.dampersPerBuilding + COSTS.rubbleRemovalPerBuilding);
     return hard * (1 + COSTS.engineeringRebuildRate);
   }
-
-  // Aggregate repair-package cost
   function repairAggregate(areaM2, stories) {
-    const hard = areaM2 * stories *
-      (COSTS.structuralRepairPerM2 + COSTS.seismicRetrofitPerM2);
+    const hard = areaM2 * stories * (COSTS.structuralRepairPerM2 + COSTS.seismicRetrofitPerM2);
     return hard * (1 + COSTS.engineeringRepairRate);
   }
-
-  // Blended expected cost for a detected population with a rebuild share r
+  // Blended expected cost for a detected population, split by rebuild share r.
   function blendedAggregate(n, areaM2, stories, r) {
     return rebuildAggregate(n * r, areaM2 * r, stories) +
            repairAggregate(areaM2 * (1 - r), stories);
   }
 
+  // ============================ DATA SOURCE ==================================
+  // Preferred: static v1 confidence-tier data shipped alongside this page
+  // (real per-building geometry, exact match to the official 69,431 count).
+  // Fallback: the older probability-based (v0) hosted ArcGIS service, used
+  // automatically if the local files aren't found (e.g. not yet deployed).
+  const STATIC_STATS_URL = "./data/emsr884_v1_stats.json";     // [id, tierCode, damage, area_m2][]
+  const STATIC_GEOJSON_URL = "./data/emsr884_v1_structures.geojson";
+  const PROBABILITY_SERVICE_URL =
+    "https://services7.arcgis.com/WSiUmUhlFx4CtMBB/ArcGIS/rest/services/202610_s1_likelydmgareas/FeatureServer/0";
+
+  const TIER_CODE = { high_confidence: "h", probable: "p", possible: "o" };
+  const TIER_NAME = { h: "high_confidence", p: "probable", o: "possible" };
+  const TIER_I18N_KEY = { h: "tierHC", p: "tierProbable", o: "tierPossible" };
+
+  let mode = null;              // "tier" | "probability"
+  let staticStats = null;       // parsed array from STATIC_STATS_URL
+  let activeLayer = null;       // GeoJSONLayer (tier mode) or FeatureLayer (probability mode)
+  let currentArea = 0;
+  let currentClickedIsRebuildDefault = false;
+  let areaFactor = null;        // probability-mode only: Shape__Area units -> m2
+  let oidField = "fid";
+  let csvRunning = false;
+
+  const webmap = new WebMap({
+    portalItem: { id: "0c3d77dd5aae46e4829d9a282477615c" }
+  });
+  const view = new MapView({ container: "viewDiv", map: webmap });
+
+  // ======================= BUILDING LABELS / ETIQUETAS =======================
+  const ANNOTATIONS = [
+    { overture_id: "0796751d-a57e-463c-8bae-bdb42cbd211f", text: "People are alive 6/7/26" },
+    { overture_id: "1485d9de-b1dd-4a8a-bced-8dc31dbff54f", text: "People are alive 6/7/26" },
+    { overture_id: "f380dc97-99f7-423c-b301-201964b94b50", text: "People are alive 6/7/26" }
+  ];
+
+  const annotationsLayer = new GraphicsLayer({ title: "Building labels" });
+  webmap.add(annotationsLayer);
+
+  let labelMode = false;
+  let sessionAnnotations = [];
+  try { sessionAnnotations = JSON.parse(localStorage.getItem("dce_labels") || "[]"); }
+  catch (e) { sessionAnnotations = []; }
+
+  function saveSessionAnnotations() {
+    try { localStorage.setItem("dce_labels", JSON.stringify(sessionAnnotations)); }
+    catch (e) { /* storage unavailable */ }
+  }
+
+  function drawAnnotation(geometry, text) {
+    annotationsLayer.add(new Graphic({
+      geometry: geometry,
+      symbol: { type: "simple-fill", color: [0, 0, 0, 0], outline: { color: [0, 255, 255, 1], width: 2.5 } }
+    }));
+    annotationsLayer.add(new Graphic({
+      geometry: geometry.centroid || geometry,
+      symbol: {
+        type: "text", text: text, color: "white",
+        haloColor: [185, 28, 28, 1], haloSize: 2, yoffset: 12,
+        font: { size: 12, weight: "bold", family: "Arial" }
+      }
+    }));
+  }
+
+  // Works against whichever layer is active (GeoJSONLayer or FeatureLayer both
+  // support createQuery/queryFeatures with the same interface).
+  async function loadAnnotations() {
+    const all = ANNOTATIONS.concat(sessionAnnotations);
+    if (!all.length || !activeLayer) return;
+
+    const ids = [...new Set(all.map(a => a.overture_id))]
+      .map(id => "'" + String(id).replaceAll("'", "''") + "'");
+
+    const q = activeLayer.createQuery();
+    q.where = "overture_id IN (" + ids.join(",") + ")";
+    q.outFields = ["overture_id"];
+    q.returnGeometry = true;
+
+    const fs = await activeLayer.queryFeatures(q);
+    fs.features.forEach(f => {
+      all.filter(a => a.overture_id === f.attributes.overture_id)
+         .forEach(a => drawAnnotation(f.geometry, a.text));
+    });
+  }
+  // ===========================================================================
+
+  // ==================== SISMOAYUDA VE PINS / REPORTES =======================
+  const PINS_GEOJSON_URL = ""; // set once SismoAyuda VE shares their export
+  const PINS_STATUS_FIELD = "estatus";
+  const PINS_DATE_FIELD = "fecha";
+
+  let pinsLayer = null;
+  if (PINS_GEOJSON_URL) {
+    pinsLayer = new GeoJSONLayer({
+      url: PINS_GEOJSON_URL,
+      title: "SismoAyuda VE",
+      renderer: {
+        type: "unique-value",
+        field: PINS_STATUS_FIELD,
+        defaultSymbol: { type: "simple-marker", size: 9, color: [230, 126, 34, 0.9], outline: { color: "white", width: 1 } },
+        uniqueValueInfos: [
+          { value: "Inspeccionado", symbol: { type: "simple-marker", size: 9, color: [39, 174, 96, 0.9], outline: { color: "white", width: 1 } } },
+          { value: "Entrada limitada", symbol: { type: "simple-marker", size: 9, color: [241, 196, 15, 0.95], outline: { color: "white", width: 1 } } },
+          { value: "No seguro", symbol: { type: "simple-marker", size: 10, color: [192, 57, 43, 0.95], outline: { color: "white", width: 1 } } },
+          { value: "Ticket abierto", symbol: { type: "simple-marker", size: 8, color: [127, 140, 141, 0.9], outline: { color: "white", width: 1 } } }
+        ]
+      },
+      popupTemplate: {
+        title: "SismoAyuda VE — {" + PINS_STATUS_FIELD + "}",
+        content: [{ type: "fields", fieldInfos: [
+          { fieldName: PINS_STATUS_FIELD, label: "Estatus / Status" },
+          { fieldName: PINS_DATE_FIELD, label: "Fecha / Date" }
+        ] }]
+      }
+    });
+    webmap.add(pinsLayer);
+  }
+  // ===========================================================================
+
+  function fillSym(rgba) {
+    return { type: "simple-fill", color: rgba, outline: { color: [255, 255, 255, 0.5], width: 0.5 } };
+  }
+
+  // -------------------- TIER MODE (preferred: static v1 data) ----------------
+  async function initTierMode() {
+    const resp = await fetch(STATIC_STATS_URL);
+    if (!resp.ok) throw new Error("static stats file not found (" + resp.status + ")");
+    staticStats = await resp.json();
+    mode = "tier";
+
+    const geoLayer = new GeoJSONLayer({
+      url: STATIC_GEOJSON_URL,
+      title: "Structures (v1 confidence tiers)",
+      outFields: ["overture_id", "damage_confidence", "damage"],
+      renderer: {
+        type: "unique-value",
+        field: "damage_confidence",
+        uniqueValueInfos: [
+          { value: "high_confidence", symbol: fillSym([230, 0, 0, 255]) },
+          { value: "probable", symbol: fillSym([255, 85, 0, 255]) },
+          { value: "possible", symbol: fillSym([255, 255, 115, 255]) }
+        ]
+      }
+    });
+    webmap.add(geoLayer, 0);
+    await geoLayer.load();
+    activeLayer = geoLayer;
+  }
+
+  function computeTierScenarios() {
+    let n = { h: 0, p: 0, o: 0 };
+    let a = { h: 0, p: 0, o: 0 };
+    for (const row of staticStats) {
+      const tc = row[1];
+      n[tc]++;
+      a[tc] += row[3];
+    }
+    return {
+      hc:      { n: n.h, area: a.h },
+      central: { n: n.h + n.p, area: a.h + a.p },
+      upper:   { n: n.h + n.p + n.o, area: a.h + a.p + a.o }
+    };
+  }
+
+  // -------------------- PROBABILITY MODE (fallback: v0 service) --------------
+  const NO_WORK_MAX = 0.01;
+  const WHERE_REBUILD = "(damage_probability >= 0.75 OR label = 'likely_damaged')";
+  const WHERE_NONE = "NOT " + WHERE_REBUILD + " AND (damage_probability <= " + NO_WORK_MAX + " OR damage_probability IS NULL)";
+  const WHERE_REPAIR = "NOT " + WHERE_REBUILD + " AND damage_probability > " + NO_WORK_MAX + " AND damage_probability < 0.75";
+
+  let probLayer = null;
+
+  async function initProbabilityMode() {
+    mode = "probability";
+    probLayer = new FeatureLayer({ url: PROBABILITY_SERVICE_URL, outFields: ["*"] });
+    await probLayer.load();
+    activeLayer = probLayer;
+    oidField = probLayer.objectIdField || "fid";
+
+    const hasShapeArea = (probLayer.fields || []).some(f => f.name === "Shape__Area");
+    if (!hasShapeArea) throw new Error(t("errNoShapeArea"));
+
+    const q = probLayer.createQuery();
+    q.where = "Shape__Area > 0";
+    q.outFields = [oidField, "Shape__Area"];
+    q.returnGeometry = true;
+    q.num = 25;
+    const fs = await probLayer.queryFeatures(q);
+    const ratios = fs.features
+      .filter(f => f.geometry && f.attributes.Shape__Area > 0)
+      .map(f => Math.abs(geometryEngine.geodesicArea(f.geometry, "square-meters")) / f.attributes.Shape__Area)
+      .sort((a, b) => a - b);
+    if (!ratios.length) throw new Error(t("errCalibration"));
+    areaFactor = ratios[Math.floor(ratios.length / 2)];
+  }
+
+  async function statsFor(where) {
+    const q = probLayer.createQuery();
+    q.where = where;
+    q.returnGeometry = false;
+    q.outStatistics = [
+      { statisticType: "count", onStatisticField: oidField, outStatisticFieldName: "n" },
+      { statisticType: "sum", onStatisticField: "Shape__Area", outStatisticFieldName: "sumRaw" }
+    ];
+    const fs = await probLayer.queryFeatures(q);
+    const a = (fs.features[0] && fs.features[0].attributes) || {};
+    return { n: Number(a.n) || 0, areaM2: (Number(a.sumRaw) || 0) * areaFactor };
+  }
+
+  // ============================== UI MODE SWITCH ==============================
+  function applyModeToUI() {
+    const banner = $("modeBanner");
+    if (mode === "tier") {
+      $("summaryTitle").innerHTML = t("programScenarios");
+      $("colLabel").innerHTML = t("colScenario");
+      $("lbl1").innerHTML = t("tierConservative");
+      $("lbl2").innerHTML = t("tierCentral");
+      $("lbl3").innerHTML = t("tierUpper");
+      $("row3").style.display = "";
+      $("row4").style.display = "none";
+      $("row5").style.display = "none";
+      $("rowTotal").style.display = "none";
+      $("summaryNote").innerHTML = t("summaryNoteTier");
+      $("damageRowLabel").innerHTML = t("rowDamageTier");
+      $("rebuildShare").disabled = false;
+      document.querySelectorAll(".presetShare").forEach(b => b.disabled = false);
+      $("shareNote").innerHTML = t("shareNoteTier");
+      banner.innerHTML = t("modeBannerTier");
+      banner.className = "";
+    } else {
+      $("summaryTitle").innerHTML = t("programSummary");
+      $("colLabel").innerHTML = t("colCategory");
+      $("lbl1").innerHTML = t("cat75");
+      $("lbl2").innerHTML = t("cat164");
+      $("lbl4").innerHTML = t("cat0");
+      $("lbl5").innerHTML = t("catNA");
+      $("row3").style.display = "none";
+      $("row4").style.display = "";
+      $("row5").style.display = "";
+      $("rowTotal").style.display = "";
+      $("summaryNote").innerHTML = t("summaryNoteProb");
+      $("damageRowLabel").innerHTML = t("rowDamageProb");
+      $("rebuildShare").disabled = true;
+      document.querySelectorAll(".presetShare").forEach(b => b.disabled = true);
+      $("shareNote").innerHTML = t("shareNoteProb");
+      banner.innerHTML = t("modeBannerProb");
+      banner.className = "fallback";
+    }
+  }
+
+  function highlightPreset(value) {
+    document.querySelectorAll(".presetShare").forEach(btn =>
+      btn.classList.toggle("active", btn.dataset.value === String(value)));
+  }
+
+  // ============================== SUMMARY CALC ================================
+  async function calculateSummary() {
+    setStatus(t("statusCalculating"));
+    try {
+      const stories = getStories();
+      if (mode === "tier") {
+        const r = getRebuildShare();
+        const scen = computeTierScenarios();
+        $("count1").innerHTML = fmt(scen.hc.n);
+        $("count2").innerHTML = fmt(scen.central.n);
+        $("count3").innerHTML = fmt(scen.upper.n);
+        $("cost1").innerHTML = money(blendedAggregate(scen.hc.n, scen.hc.area, stories, r));
+        $("cost2").innerHTML = money(blendedAggregate(scen.central.n, scen.central.area, stories, r));
+        $("cost3").innerHTML = money(blendedAggregate(scen.upper.n, scen.upper.area, stories, r));
+        setStatus(t("statusCalculatedTier"));
+      } else {
+        const [rebuild, repair, none, na] = await Promise.all([
+          statsFor(WHERE_REBUILD), statsFor(WHERE_REPAIR), statsFor(WHERE_NONE),
+          statsFor("within_coverage = 0")
+        ]);
+        const costRebuild = rebuildAggregate(rebuild.n, rebuild.areaM2, stories);
+        const costRepair = repairAggregate(repair.areaM2, stories);
+        $("count1").innerHTML = fmt(rebuild.n);
+        $("count2").innerHTML = fmt(repair.n);
+        $("count4").innerHTML = fmt(none.n);
+        $("count5").innerHTML = fmt(na.n);
+        $("cost1").innerHTML = money(costRebuild);
+        $("cost2").innerHTML = money(costRepair);
+        $("countTotal").innerHTML = fmt(rebuild.n + repair.n + none.n + na.n);
+        $("costTotal").innerHTML = money(costRebuild + costRepair);
+        setStatus(t("statusCalculatedProb"));
+      }
+    } catch (error) {
+      console.error(error);
+      setStatus(t("statusErrorSummary") + (error && error.message ? error.message : t("statusConsole")));
+    }
+  }
+
+  // ============================ CLICKED BUILDING ==============================
   function updateClickedBuildingPanel() {
     if (!currentArea) return;
-
     const stories = getStories();
     const isRebuild = $("workPackage").value === "rebuild";
-    const result = computeCost(currentArea, stories, isRebuild);
+    const result = computeCostForPackage(currentArea, stories, isRebuild);
 
     $("area").innerHTML = currentArea.toFixed(1) + " m²";
     $("areaFt").innerHTML = (currentArea * 10.7639).toFixed(1) + " ft²";
@@ -293,205 +770,42 @@ require([
     $("totalCost").innerHTML = money(result.totalCost);
   }
 
-  // ------------------------- WHERE clauses per mode -------------------------
-  function whereClauses() {
-    if (mode === "tier") {
-      return {
-        rows: [
-          SCEN_TIER.hc,
-          SCEN_TIER.central,
-          SCEN_TIER.upper
-        ],
-        below: F_TIER + " = 'below_floor'",
-        na: "(" + F_TIER + " = 'NA' OR " + F_TIER + " IS NULL)"
-      };
-    }
-    // probability mode: mutually exclusive v0 buckets
-    const rebuild = "(" + F_PROB + " >= 0.75 OR " + F_LABEL + " = 'likely_damaged')";
-    const assessed = hasField(F_WITHIN)
-      ? "(" + F_WITHIN + " <> 0 OR " + F_WITHIN + " IS NULL)" : "1=1";
-    const naClause = hasField(F_WITHIN) ? F_WITHIN + " = 0" : "1=0";
-    return {
-      rows: [
-        rebuild + " AND " + assessed,
-        "NOT " + rebuild + " AND " + F_PROB + " > " + NO_WORK_MAX +
-          " AND " + F_PROB + " < 0.75 AND " + assessed,
-        null // row3 unused in probability mode
-      ],
-      below: "NOT " + rebuild + " AND (" + F_PROB + " <= " + NO_WORK_MAX +
-        " OR " + F_PROB + " IS NULL) AND " + assessed,
-      na: naClause
-    };
-  }
+  view.on("click", async function(event) {
+    const response = await view.hitTest(event);
+    const result = response.results.find(r =>
+      r.graphic && r.graphic.geometry && r.graphic.geometry.type === "polygon"
+    );
+    if (!result) return;
 
-  const SCEN_TIER = {
-    hc:      F_TIER + " = 'high_confidence'",
-    central: F_TIER + " IN ('high_confidence','probable')",
-    upper:   F_TIER + " IN ('high_confidence','probable','possible')"
-  };
+    const a = result.graphic.attributes || {};
 
-  function hasField(name) {
-    return fieldNames.includes(name);
-  }
-
-  function applyModeToUI() {
-    const banner = $("modeBanner");
-    if (mode === "tier") {
-      $("summaryTitle").innerHTML = "Program Cost Scenarios";
-      $("colLabel").innerHTML = "Scenario (detection confidence)";
-      $("lbl1").innerHTML = "Conservative<br>high_confidence only (z&ge;3)";
-      $("lbl2").innerHTML = "<b>Central</b><br>+ probable (z&ge;2, official damage layer)";
-      $("lbl3").innerHTML = "Upper bound<br>+ possible (z&ge;1.5)";
-      $("lbl4").innerHTML = "Below detection floor<br>No coherence-loss signal";
-      $("lbl5").innerHTML = "Not assessed<br>No usable radar coverage";
-      $("row3").style.display = "";
-      $("rowTotal").style.display = "none"; // cumulative scenarios have no meaningful sum
-      $("summaryNote").innerHTML =
-        "Scenarios are cumulative (each row includes the rows above it). " +
-        "Confidence tiers measure detection certainty, not damage severity; " +
-        "severity is set by the demolition-share assumption below. " +
-        "\"Not assessed\" buildings are excluded from all cost figures.";
-      $("damageRowLabel").innerHTML = "Confidence Tier";
-      $("rebuildShare").disabled = false;
-      document.querySelectorAll(".presetShare").forEach(b => b.disabled = false);
-      banner.style.display = "none";
-    } else {
-      $("summaryTitle").innerHTML = "Program Summary";
-      $("colLabel").innerHTML = "Damage Category";
-      $("lbl1").innerHTML = "&ge;75% Damage / likely damaged<br>Demolish &amp; Rebuild";
-      $("lbl2").innerHTML = "1&ndash;74% Damage (yellow/orange)<br>Repair &amp; Retrofit";
-      $("lbl4").innerHTML = "&le;1% Damage (white)<br>No Reconstruction";
-      $("lbl5").innerHTML = "Not assessed<br>Outside radar coverage";
-      $("row3").style.display = "none";
-      $("rowTotal").style.display = "";
-      $("summaryNote").innerHTML =
-        "Categories follow the layer's legend thresholds. Each category is " +
-        "priced with its own work package (no demolition-share blending in " +
-        "this mode).";
-      $("damageRowLabel").innerHTML = "Damage Probability";
-      // The demolition share applies to the v1 tier model only
-      $("rebuildShare").disabled = true;
-      document.querySelectorAll(".presetShare").forEach(b => b.disabled = true);
-      $("shareNote").innerHTML =
-        "Applies to the v1 confidence-tier data. Disabled while the " +
-        "connected service contains the previous probability-based delivery.";
-      banner.innerHTML =
-        "<b>Interim mode:</b> the connected service still contains the " +
-        "previous probability-based delivery (v0, damage_probability). " +
-        "The three confidence-tier cost scenarios will activate " +
-        "automatically once the v1 data (damage_confidence) is published " +
-        "at the configured layer URL.";
-      banner.style.display = "block";
-    }
-  }
-
-  // ---------------------------------------------------------------------
-  // Startup
-  // ---------------------------------------------------------------------
-  async function initLayer() {
-    await structuresLayer.load();
-    oidField = structuresLayer.objectIdField || "fid";
-    fieldNames = (structuresLayer.fields || []).map(f => f.name);
-    idField = hasField("overture_id") ? "overture_id" : oidField;
-
-    if (!hasField("Shape__Area")) {
-      throw new Error("Layer has no Shape__Area field - cannot compute fast summaries.");
-    }
-
-    if (hasField(F_TIER)) {
-      mode = "tier";
-    } else if (hasField(F_PROB)) {
-      mode = "probability";
-    } else {
-      throw new Error("Layer has neither '" + F_TIER + "' nor '" + F_PROB +
-        "' - unrecognized schema.");
-    }
-    applyModeToUI();
-
-    // Calibrate Shape__Area -> m2 from a sample (median of geodesic ratios)
-    const q = structuresLayer.createQuery();
-    q.where = "Shape__Area > 0";
-    q.outFields = [oidField, "Shape__Area"];
-    q.returnGeometry = true;
-    q.num = 25;
-
-    const fs = await structuresLayer.queryFeatures(q);
-    const ratios = fs.features
-      .filter(f => f.geometry && f.attributes.Shape__Area > 0)
-      .map(f => Math.abs(geometryEngine.geodesicArea(f.geometry, "square-meters")) /
-                f.attributes.Shape__Area)
-      .sort((a, b) => a - b);
-
-    if (!ratios.length) {
-      throw new Error("Could not calibrate area units from sample features.");
-    }
-    areaFactor = ratios[Math.floor(ratios.length / 2)];
-  }
-
-  async function statsFor(where) {
-    const q = structuresLayer.createQuery();
-    q.where = where;
-    q.returnGeometry = false;
-    q.outStatistics = [
-      { statisticType: "count", onStatisticField: oidField, outStatisticFieldName: "n" },
-      { statisticType: "sum", onStatisticField: "Shape__Area", outStatisticFieldName: "sumRaw" }
-    ];
-    const fs = await structuresLayer.queryFeatures(q);
-    const a = (fs.features[0] && fs.features[0].attributes) || {};
-    return { n: Number(a.n) || 0, areaM2: (Number(a.sumRaw) || 0) * areaFactor };
-  }
-
-  async function calculateSummary() {
-    setStatus("Calculating program summary...");
-    try {
-      const stories = getStories();
-      const w = whereClauses();
-
-      if (mode === "tier") {
-        const r = getRebuildShare();
-        const [s1, s2, s3, below, na] = await Promise.all([
-          statsFor(w.rows[0]), statsFor(w.rows[1]), statsFor(w.rows[2]),
-          statsFor(w.below), statsFor(w.na)
-        ]);
-        $("count1").innerHTML = s1.n.toLocaleString();
-        $("count2").innerHTML = s2.n.toLocaleString();
-        $("count3").innerHTML = s3.n.toLocaleString();
-        $("count4").innerHTML = below.n.toLocaleString();
-        $("count5").innerHTML = na.n.toLocaleString();
-        $("cost1").innerHTML = money(blendedAggregate(s1.n, s1.areaM2, stories, r));
-        $("cost2").innerHTML = money(blendedAggregate(s2.n, s2.areaM2, stories, r));
-        $("cost3").innerHTML = money(blendedAggregate(s3.n, s3.areaM2, stories, r));
-        setStatus("Scenarios calculated. The Central row should match the " +
-          "release headline count (69,431 in delivery v1).");
-      } else {
-        const [rebuild, repair, below, na] = await Promise.all([
-          statsFor(w.rows[0]), statsFor(w.rows[1]),
-          statsFor(w.below), statsFor(w.na)
-        ]);
-        const costRebuild = rebuildAggregate(rebuild.n, rebuild.areaM2, stories);
-        const costRepair = repairAggregate(repair.areaM2, stories);
-
-        $("count1").innerHTML = rebuild.n.toLocaleString();
-        $("count2").innerHTML = repair.n.toLocaleString();
-        $("count4").innerHTML = below.n.toLocaleString();
-        $("count5").innerHTML = na.n.toLocaleString();
-        $("cost1").innerHTML = money(costRebuild);
-        $("cost2").innerHTML = money(costRepair);
-        $("countTotal").innerHTML =
-          (rebuild.n + repair.n + below.n + na.n).toLocaleString();
-        $("costTotal").innerHTML = money(costRebuild + costRepair);
-        setStatus("Program summary calculated. Use the button to download the CSV.");
+    if (labelMode) {
+      const text = window.prompt(t("labelPrompt"), "");
+      if (text && text.trim()) {
+        drawAnnotation(result.graphic.geometry, text.trim());
+        sessionAnnotations.push({ overture_id: a.overture_id || "", text: text.trim() });
+        saveSessionAnnotations();
+        setStatus(t("labelSaved"));
       }
-    } catch (error) {
-      console.error(error);
-      setStatus("Could not calculate summary: " +
-        (error && error.message ? error.message : "see Console for details."));
+      return;
     }
-  }
 
-  // CSV export: attributes only, no geometry. Every row carries both the
-  // repair and rebuild package costs plus the cost assigned under the
-  // active mode's rules, so any scenario can be re-aggregated externally.
+    if (mode === "tier") {
+      const tier = a.damage_confidence || "";
+      $("clickedDamage").innerHTML = TIER_I18N_KEY[TIER_CODE[tier]] ? t(TIER_I18N_KEY[TIER_CODE[tier]]) : tier;
+      currentClickedIsRebuildDefault = false; // tier != severity: default to repair
+    } else {
+      const dp = Number(a.damage_probability);
+      $("clickedDamage").innerHTML = isNaN(dp) ? "--" : (dp * 100).toFixed(0) + "%";
+      currentClickedIsRebuildDefault = (dp >= 0.75 || a.label === "likely_damaged");
+    }
+
+    $("workPackage").value = currentClickedIsRebuildDefault ? "rebuild" : "repair";
+    currentArea = Math.abs(geometryEngine.geodesicArea(result.graphic.geometry, "square-meters"));
+    updateClickedBuildingPanel();
+  });
+
+  // ================================ CSV EXPORT =================================
   async function downloadAllBuildingsCSV() {
     if (csvRunning) return;
     csvRunning = true;
@@ -500,140 +814,112 @@ require([
 
     try {
       const stories = getStories();
-      const r = getRebuildShare();
 
-      const wanted = [idField, F_TIER, F_PROB, F_DAMAGE, F_LABEL, F_COVERAGE, F_WITHIN, "Shape__Area"]
-        .filter(hasField);
-
-      const query = structuresLayer.createQuery();
-      query.where = "1=1";
-      query.outFields = wanted;
-      query.returnGeometry = false;
-      query.orderByFields = [oidField];
-
-      const count = await structuresLayer.queryFeatureCount(query);
-      const rows = [];
-      const pageSize = 2000;
-
-      for (let start = 0; start < count; start += pageSize) {
-        query.start = start;
-        query.num = pageSize;
-
-        const featureSet = await structuresLayer.queryFeatures(query);
-
-        featureSet.features.forEach(feature => {
-          const a = feature.attributes || {};
-          const areaM2 = (Number(a.Shape__Area) || 0) * areaFactor;
-          const repair = computeCost(areaM2, stories, false);
-          const rebuild = computeCost(areaM2, stories, true);
-
-          let assignedPackage, assignedCost;
-          if (mode === "tier") {
-            const tier = a[F_TIER] || "NA";
-            const detected = ["possible", "probable", "high_confidence"].includes(tier);
-            assignedPackage = detected ? "Blended (share " + r + ")" : "None";
-            assignedCost = detected
-              ? r * rebuild.totalCost + (1 - r) * repair.totalCost : 0;
-          } else {
-            const dp = Number(a[F_PROB]) || 0;
-            const isRebuild = dp >= 0.75 || a[F_LABEL] === "likely_damaged";
-            const noWork = !isRebuild && dp <= NO_WORK_MAX;
-            assignedPackage = isRebuild ? "Demolish & Rebuild"
-              : noWork ? "None" : "Repair & Retrofit";
-            assignedCost = isRebuild ? rebuild.totalCost
-              : noWork ? 0 : repair.totalCost;
-          }
-
-          const row = { building_id: a[idField] != null ? a[idField] : "" };
-          if (hasField(F_TIER)) row.damage_confidence = a[F_TIER] != null ? a[F_TIER] : "";
-          if (hasField(F_PROB)) row.damage_probability = a[F_PROB] != null ? a[F_PROB] : "";
-          if (hasField(F_DAMAGE)) row.damage = a[F_DAMAGE] != null ? a[F_DAMAGE] : "";
-          if (hasField(F_LABEL)) row.label = a[F_LABEL] != null ? a[F_LABEL] : "";
-          if (hasField(F_COVERAGE)) row.coverage_fraction = a[F_COVERAGE] != null ? a[F_COVERAGE] : "";
-          row.footprint_m2 = areaM2.toFixed(1);
-          row.assumed_stories = stories;
-          row.built_area_m2 = (areaM2 * stories).toFixed(1);
-          row.repair_retrofit_cost = Math.round(repair.totalCost);
-          row.demolish_rebuild_cost = Math.round(rebuild.totalCost);
-          row.assigned_package = assignedPackage;
-          row.assigned_cost = Math.round(assignedCost);
-          rows.push(row);
+      if (mode === "tier") {
+        const r = getRebuildShare();
+        const H = t("csvHeadersTier");
+        const rows = staticStats.map(([id, tc, damage, areaM2]) => {
+          const repair = computeCostForPackage(areaM2, stories, false);
+          const rebuild = computeCostForPackage(areaM2, stories, true);
+          const assignedCost = r * rebuild.totalCost + (1 - r) * repair.totalCost;
+          const row = {};
+          row[H.id] = id;
+          row[H.tier] = TIER_NAME[tc];
+          row[H.damage] = damage;
+          row[H.m2] = areaM2.toFixed(1);
+          row[H.stories] = stories;
+          row[H.built] = (areaM2 * stories).toFixed(1);
+          row[H.repairCost] = Math.round(repair.totalCost);
+          row[H.rebuildCost] = Math.round(rebuild.totalCost);
+          row[H.assignedPkg] = "Blended (share " + r + ")";
+          row[H.assignedCost] = Math.round(assignedCost);
+          return row;
         });
+        writeCSV(rows);
+        setStatus(t("statusDownloaded")(fmt(rows.length),
+          money(rows.reduce((s, x) => s + x[H.assignedCost], 0))));
+      } else {
+        const H = t("csvHeadersProb");
+        const query = probLayer.createQuery();
+        query.where = "1=1";
+        query.outFields = ["overture_id", "label", "damage_probability", "Shape__Area"];
+        query.returnGeometry = false;
+        query.orderByFields = [oidField];
 
-        setStatus("Processed " +
-          Math.min(start + pageSize, count).toLocaleString() +
-          " of " + count.toLocaleString() + " buildings...");
+        const count = await probLayer.queryFeatureCount(query);
+        const rows = [];
+        let totalCost = 0;
+        const pageSize = 2000;
+
+        for (let start = 0; start < count; start += pageSize) {
+          query.start = start;
+          query.num = pageSize;
+          const featureSet = await probLayer.queryFeatures(query);
+
+          featureSet.features.forEach(feature => {
+            const attrs = feature.attributes || {};
+            const areaM2 = (Number(attrs.Shape__Area) || 0) * areaFactor;
+            const label = attrs.label || "";
+            const dp = Number(attrs.damage_probability) || 0;
+            const isRebuild = dp >= 0.75 || label === "likely_damaged";
+            const noWork = !isRebuild && dp <= NO_WORK_MAX;
+            const result = computeCostForPackage(areaM2, stories, isRebuild);
+            const rowTotal = noWork ? 0 : result.totalCost;
+            totalCost += rowTotal;
+
+            const row = {};
+            row[H.id] = attrs.overture_id || "";
+            row[H.label] = label;
+            row[H.prob] = dp;
+            row[H.m2] = areaM2.toFixed(1);
+            row[H.ft2] = (areaM2 * 10.7639).toFixed(1);
+            row[H.stories] = stories;
+            row[H.built] = (areaM2 * stories).toFixed(1);
+            row[H.wp] = noWork ? t("wpNone") : (isRebuild ? t("wpRebuild") : t("wpRepair"));
+            row[H.base] = noWork ? 0 : Math.round(result.baseCost);
+            row[H.repairs] = noWork ? 0 : Math.round(result.repairCost);
+            row[H.retrofit] = noWork ? 0 : Math.round(result.retrofitCost);
+            row[H.isolation] = noWork ? 0 : Math.round(result.isolatorCost);
+            row[H.dampers] = noWork ? 0 : Math.round(result.damperCost);
+            row[H.rubble] = noWork ? 0 : Math.round(result.rubbleCost);
+            row[H.eng] = noWork ? 0 : Math.round(result.engineeringCost);
+            row[H.totalCost] = Math.round(rowTotal);
+            rows.push(row);
+          });
+
+          setStatus(t("statusProcessed")(fmt(Math.min(start + pageSize, count)), fmt(count)));
+        }
+
+        if (rows.length === 0) { setStatus(t("statusNoRecords")); return; }
+        writeCSV(rows);
+        setStatus(t("statusDownloaded")(fmt(rows.length), money(totalCost)));
       }
-
-      if (rows.length === 0) {
-        setStatus("No building records found.");
-        return;
-      }
-
-      const headers = Object.keys(rows[0]);
-      const csv = [
-        headers.join(","),
-        ...rows.map(row =>
-          headers.map(h => `"${String(row[h]).replaceAll('"', '""')}"`).join(",")
-        )
-      ].join("\n");
-
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "building_cost_estimates.csv";
-      link.click();
-
-      URL.revokeObjectURL(url);
-
-      setStatus("Downloaded " + rows.length.toLocaleString() + " buildings.");
     } catch (error) {
       console.error(error);
-      setStatus("Could not download CSV: " +
-        (error && error.message ? error.message : "see Console for details."));
+      setStatus(t("statusErrorCSV") + (error && error.message ? error.message : t("statusConsole")));
     } finally {
       csvRunning = false;
       button.disabled = false;
     }
   }
 
-  view.on("click", async function(event) {
-    const response = await view.hitTest(event);
+  function writeCSV(rows) {
+    if (!rows.length) return;
+    const headers = Object.keys(rows[0]);
+    const csv = [
+      headers.join(","),
+      ...rows.map(row => headers.map(h => `"${String(row[h]).replaceAll('"', '""')}"`).join(","))
+    ].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = t("csvFilename");
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
-    const result = response.results.find(r =>
-      r.graphic && r.graphic.geometry && r.graphic.geometry.type === "polygon"
-    );
-
-    if (!result) return;
-
-    const a = result.graphic.attributes || {};
-    const coverage = Number(a[F_COVERAGE]);
-    $("clickedCoverage").innerHTML =
-      isNaN(coverage) ? "--" : (coverage * 100).toFixed(0) + "%";
-
-    if (mode === "tier") {
-      const tier = a[F_TIER] || "NA";
-      $("clickedDamage").innerHTML = tier;
-      // Tier is detection confidence, not severity: default to repair and
-      // let the user choose rebuild explicitly.
-      selectedIsRebuildDefault = false;
-    } else {
-      const dp = Number(a[F_PROB]);
-      $("clickedDamage").innerHTML =
-        isNaN(dp) ? "--" : (dp * 100).toFixed(0) + "%";
-      // v0 behavior restored: high-probability / likely_damaged buildings
-      // pre-select the rebuild package automatically.
-      selectedIsRebuildDefault = (dp >= 0.75 || a[F_LABEL] === "likely_damaged");
-    }
-
-    $("workPackage").value = selectedIsRebuildDefault ? "rebuild" : "repair";
-
-    currentArea = Math.abs(geometryEngine.geodesicArea(result.graphic.geometry, "square-meters"));
-    updateClickedBuildingPanel();
-  });
-
+  // ================================ WIRING =====================================
   $("workPackage").addEventListener("change", updateClickedBuildingPanel);
 
   const debouncedSummary = debounce(calculateSummary, 400);
@@ -642,20 +928,13 @@ require([
     debouncedSummary();
   });
 
-  function highlightPreset(value) {
-    document.querySelectorAll(".presetShare").forEach(function(btn) {
-      btn.classList.toggle("active", btn.dataset.value === String(value));
-    });
-  }
-
-  document.querySelectorAll(".presetShare").forEach(function(btn) {
+  document.querySelectorAll(".presetShare").forEach(btn => {
     btn.addEventListener("click", function() {
       $("rebuildShare").value = btn.dataset.value;
       highlightPreset(btn.dataset.value);
       calculateSummary();
     });
   });
-
   $("rebuildShare").addEventListener("input", function() {
     highlightPreset($("rebuildShare").value);
     debouncedSummary();
@@ -663,18 +942,59 @@ require([
 
   $("downloadAllCSV").addEventListener("click", downloadAllBuildingsCSV);
 
-  initLayer()
-    .then(calculateSummary)
+  $("langSelect").addEventListener("change", function() {
+    lang = this.value;
+    try { localStorage.setItem("dce_lang", lang); } catch (e) { /* ignore */ }
+    applyLanguage();
+    applyModeToUI();
+    calculateSummary();
+    updateClickedBuildingPanel();
+  });
+
+  if (pinsLayer) {
+    $("pinsToggleRow").style.display = "block";
+    $("pinsToggle").addEventListener("change", function() { pinsLayer.visible = this.checked; });
+  }
+
+  $("labelModeBtn").addEventListener("click", function() {
+    labelMode = !labelMode;
+    this.classList.toggle("active", labelMode);
+    setStatus(labelMode ? t("labelModeActive") : t("labelModeOff"));
+  });
+
+  $("exportLabels").addEventListener("click", function() {
+    const all = ANNOTATIONS.concat(sessionAnnotations);
+    if (!all.length) { setStatus(t("labelNone")); return; }
+    const blob = new Blob([JSON.stringify(all, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "building_labels.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+
+  applyLanguage();
+  setStatus(t("statusLoading"));
+
+  initTierMode()
+    .catch(function(err) {
+      console.warn("Static v1 data not available, falling back to probability service:", err);
+      return initProbabilityMode();
+    })
+    .then(function() {
+      applyModeToUI();
+      loadAnnotations().catch(e => console.error("Labels:", e));
+      return calculateSummary();
+    })
     .catch(function(error) {
       console.error(error);
-      setStatus("Could not initialize: " +
-        (error && error.message ? error.message : "see Console for details."));
+      setStatus(t("statusErrorInit") + (error && error.message ? error.message : t("statusConsole")));
     });
 });
 
 }
 
-// Bootstrap guard for the ArcGIS API script.
 if (typeof require === "function") {
   startApp();
 } else {
@@ -683,9 +1003,9 @@ if (typeof require === "function") {
       startApp();
     } else {
       document.getElementById("downloadStatus").innerHTML =
-        "The ArcGIS JavaScript API did not load. This page needs " +
+        "La API de JavaScript de ArcGIS no se cargó / The ArcGIS JavaScript API did not load. " +
         "&lt;script src=&quot;https://js.arcgis.com/4.30/&quot;&gt;&lt;/script&gt; " +
-        "in &lt;head&gt;, BEFORE this script. Check the Network tab for a blocked request.";
+        "debe estar en &lt;head&gt; ANTES de este script / must be in &lt;head&gt; BEFORE this script.";
     }
   });
 }
