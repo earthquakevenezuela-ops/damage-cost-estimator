@@ -579,12 +579,19 @@ require([
   }
 
   // -------------------- TIER MODE (preferred: static v1 data) ----------------
+  // initTierMode() only depends on the small stats file, so scenarios can
+  // appear immediately. The heavy geometry file (tens of MB) is loaded
+  // separately, in the background, and never blocks or fails initTierMode -
+  // if it's missing/slow, the map layer just stays empty until it arrives,
+  // but the cost scenarios and CSV export keep working from stats alone.
   async function initTierMode() {
     const resp = await fetch(STATIC_STATS_URL);
     if (!resp.ok) throw new Error("static stats file not found (" + resp.status + ")");
     staticStats = await resp.json();
     mode = "tier";
+  }
 
+  function startTierMapLayer() {
     const geoLayer = new GeoJSONLayer({
       url: STATIC_GEOJSON_URL,
       title: "Structures (v1 confidence tiers)",
@@ -600,8 +607,18 @@ require([
       }
     });
     webmap.add(geoLayer, 0);
-    await geoLayer.load();
-    activeLayer = geoLayer;
+    geoLayer.load()
+      .then(function() {
+        activeLayer = geoLayer;
+        return loadAnnotations();
+      })
+      .catch(function(err) {
+        console.warn("Map geometry layer failed to load (scenarios remain unaffected):", err);
+        setStatus(t("statusCalculatedTier") + " " +
+          (lang === "es"
+            ? "(Aviso: la capa visual del mapa no cargó; verifique que data/emsr884_v1_structures.geojson exista en el repositorio.)"
+            : "(Note: the map visual layer failed to load; check that data/emsr884_v1_structures.geojson exists in the repo.)"));
+      });
   }
 
   function computeTierScenarios() {
@@ -979,13 +996,17 @@ require([
 
   initTierMode()
     .catch(function(err) {
-      console.warn("Static v1 data not available, falling back to probability service:", err);
+      console.warn("Static v1 stats not available, falling back to probability service:", err);
       return initProbabilityMode();
     })
     .then(function() {
       applyModeToUI();
-      loadAnnotations().catch(e => console.error("Labels:", e));
-      return calculateSummary();
+      if (mode === "tier") {
+        startTierMapLayer();      // heavy geometry loads in the background
+      } else {
+        loadAnnotations().catch(e => console.error("Labels:", e));
+      }
+      return calculateSummary();  // uses only the small stats file - fast either way
     })
     .catch(function(error) {
       console.error(error);
