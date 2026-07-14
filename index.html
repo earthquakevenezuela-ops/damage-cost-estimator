@@ -389,12 +389,14 @@ require([
 
   // ============================ ECONOMIC MODEL ==============================
 
+  // Cost basis: Venezuela_Reconstruction_v2_updated.xlsx, "Assumptions" tab
+  // (rates confirmed against the workbook's own "Cost Model" tab totals).
   const COSTS = {
-    constructionPerM2: 684,
+    constructionPerM2: 937.5,          // was 684; now $750/m2 base x 1.25 seismic premium (Assumptions!C20:C22)
     structuralRepairPerM2: 80,
     seismicRetrofitPerM2: 45,
-    baseIsolationPerBuilding: 180000,
-    dampersPerBuilding: 90000,
+    baseIsolationPerBuilding: 247000,  // was 180000 (Assumptions!C23)
+    dampersPerBuilding: 123000,        // was 90000 (Assumptions!C24)
     rubbleRemovalPerBuilding: 15000,
     engineeringRebuildRate: 0.12,
     engineeringRepairRate: 0.10
@@ -462,7 +464,11 @@ require([
   // Fallback: the older probability-based (v0) hosted ArcGIS service, used
   // automatically if the local files aren't found (e.g. not yet deployed).
   const STATIC_STATS_URL = "./data/emsr884_v1_stats.json";     // [id, tierCode, damage, area_m2][]
-  const STATIC_GEOJSON_URL = "./data/emsr884_v1_structures.geojson";
+  const STATIC_GEOJSON_URLS = [
+    "./data/emsr884_v1_structures_part1.geojson",
+    "./data/emsr884_v1_structures_part2.geojson",
+    "./data/emsr884_v1_structures_part3.geojson"
+  ]; // split into <25MB chunks so each fits GitHub's web-upload limit
   const PROBABILITY_SERVICE_URL =
     "https://services7.arcgis.com/WSiUmUhlFx4CtMBB/ArcGIS/rest/services/202610_s1_likelydmgareas/FeatureServer/0";
 
@@ -472,7 +478,7 @@ require([
 
   let mode = null;              // "tier" | "probability"
   let staticStats = null;       // parsed array from STATIC_STATS_URL
-  let activeLayer = null;       // GeoJSONLayer (tier mode) or FeatureLayer (probability mode)
+  let activeLayers = [];        // GeoJSONLayer[] (tier mode, one per chunk) or [FeatureLayer] (probability mode)
   let currentArea = 0;
   let currentClickedIsRebuildDefault = false;
   let areaFactor = null;        // probability-mode only: Shape__Area units -> m2
@@ -519,25 +525,29 @@ require([
     }));
   }
 
-  // Works against whichever layer is active (GeoJSONLayer or FeatureLayer both
-  // support createQuery/queryFeatures with the same interface).
+  // Works against whichever layer(s) are active - GeoJSONLayer and
+  // FeatureLayer both support createQuery/queryFeatures with the same
+  // interface, so this loops over as many layers as are currently loaded
+  // (three chunk layers in tier mode, one service layer in probability mode).
   async function loadAnnotations() {
     const all = ANNOTATIONS.concat(sessionAnnotations);
-    if (!all.length || !activeLayer) return;
+    if (!all.length || !activeLayers.length) return;
 
     const ids = [...new Set(all.map(a => a.overture_id))]
       .map(id => "'" + String(id).replaceAll("'", "''") + "'");
 
-    const q = activeLayer.createQuery();
-    q.where = "overture_id IN (" + ids.join(",") + ")";
-    q.outFields = ["overture_id"];
-    q.returnGeometry = true;
+    for (const layer of activeLayers) {
+      const q = layer.createQuery();
+      q.where = "overture_id IN (" + ids.join(",") + ")";
+      q.outFields = ["overture_id"];
+      q.returnGeometry = true;
 
-    const fs = await activeLayer.queryFeatures(q);
-    fs.features.forEach(f => {
-      all.filter(a => a.overture_id === f.attributes.overture_id)
-         .forEach(a => drawAnnotation(f.geometry, a.text));
-    });
+      const fs = await layer.queryFeatures(q);
+      fs.features.forEach(f => {
+        all.filter(a => a.overture_id === f.attributes.overture_id)
+           .forEach(a => drawAnnotation(f.geometry, a.text));
+      });
+    }
   }
   // ===========================================================================
 
@@ -592,33 +602,41 @@ require([
   }
 
   function startTierMapLayer() {
-    const geoLayer = new GeoJSONLayer({
-      url: STATIC_GEOJSON_URL,
-      title: "Structures (v1 confidence tiers)",
-      outFields: ["overture_id", "damage_confidence", "damage"],
-      renderer: {
-        type: "unique-value",
-        field: "damage_confidence",
-        uniqueValueInfos: [
-          { value: "high_confidence", symbol: fillSym([230, 0, 0, 255]) },
-          { value: "probable", symbol: fillSym([255, 85, 0, 255]) },
-          { value: "possible", symbol: fillSym([255, 255, 115, 255]) }
-        ]
-      }
+    const tierRenderer = {
+      type: "unique-value",
+      field: "damage_confidence",
+      uniqueValueInfos: [
+        { value: "high_confidence", symbol: fillSym([230, 0, 0, 255]) },
+        { value: "probable", symbol: fillSym([255, 85, 0, 255]) },
+        { value: "possible", symbol: fillSym([255, 255, 115, 255]) }
+      ]
+    };
+
+    const loadPromises = STATIC_GEOJSON_URLS.map(function(url, i) {
+      const geoLayer = new GeoJSONLayer({
+        url: url,
+        title: "Structures (v1 confidence tiers) part " + (i + 1),
+        outFields: ["overture_id", "damage_confidence", "damage"],
+        renderer: tierRenderer
+      });
+      webmap.add(geoLayer, 0);
+      return geoLayer.load()
+        .then(function() { activeLayers.push(geoLayer); })
+        .catch(function(err) {
+          console.warn("Chunk " + (i + 1) + " of the map geometry failed to load:", err);
+          return null; // let the other chunks still succeed independently
+        });
     });
-    webmap.add(geoLayer, 0);
-    geoLayer.load()
-      .then(function() {
-        activeLayer = geoLayer;
-        return loadAnnotations();
-      })
-      .catch(function(err) {
-        console.warn("Map geometry layer failed to load (scenarios remain unaffected):", err);
+
+    Promise.all(loadPromises).then(function() {
+      if (activeLayers.length < STATIC_GEOJSON_URLS.length) {
         setStatus(t("statusCalculatedTier") + " " +
           (lang === "es"
-            ? "(Aviso: la capa visual del mapa no cargó; verifique que data/emsr884_v1_structures.geojson exista en el repositorio.)"
-            : "(Note: the map visual layer failed to load; check that data/emsr884_v1_structures.geojson exists in the repo.)"));
-      });
+            ? "(Aviso: " + (STATIC_GEOJSON_URLS.length - activeLayers.length) + " de " + STATIC_GEOJSON_URLS.length + " archivos del mapa no cargaron; verifique que todos existan en data/.)"
+            : "(Note: " + (STATIC_GEOJSON_URLS.length - activeLayers.length) + " of " + STATIC_GEOJSON_URLS.length + " map files failed to load; check that all exist in data/.)"));
+      }
+      return loadAnnotations();
+    }).catch(function(e) { console.error("Labels:", e); });
   }
 
   function computeTierScenarios() {
@@ -648,7 +666,7 @@ require([
     mode = "probability";
     probLayer = new FeatureLayer({ url: PROBABILITY_SERVICE_URL, outFields: ["*"] });
     await probLayer.load();
-    activeLayer = probLayer;
+    activeLayers = [probLayer];
     oidField = probLayer.objectIdField || "fid";
 
     const hasShapeArea = (probLayer.fields || []).some(f => f.name === "Shape__Area");
